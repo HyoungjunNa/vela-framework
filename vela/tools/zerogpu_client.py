@@ -191,6 +191,12 @@ class ZeroGPUClient:
         # 3. 중국어/일본어 구두점 반복 제거 (，、。等)
         text = re.sub(r'[，、。；：！？]{3,}', '', text)
 
+        # 4. 문단/문장 단위 반복 제거 (20자+ 동일 블록이 2회 이상)
+        para_repeat = re.search(r'(.{20,}?)\1{2,}', text, re.DOTALL)
+        if para_repeat:
+            # 반복 시작점에서 첫 번째 블록만 남김
+            text = text[:para_repeat.start() + len(para_repeat.group(1))]
+
         return text.strip()
 
     def _chat_spaces_local(self, messages, max_tokens, temperature, stop) -> Dict:
