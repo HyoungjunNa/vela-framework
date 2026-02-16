@@ -431,7 +431,8 @@ class CoTReasoningEngine:
         무의미한 콘텐츠를 계속 생성함. 결론 본문까지만 유지.
         """
         _CONCLUSION_PAT = re.compile(
-            r"^#{1,3}\s*(?:(?:최종\s*)?결론|투자\s*결론|투자\s*의견|conclusio[n]?)\s*$",
+            r"^#{1,3}\s*(?:(?:최종\s*)?결론|투자\s*결론|투자\s*의견|"
+            r"conclusio[n]?(?:s?\s*(?:and|&)\s*key\s*takeaways?)?)\s*$",
             re.IGNORECASE | re.MULTILINE,
         )
 
