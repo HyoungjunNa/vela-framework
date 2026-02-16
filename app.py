@@ -1,14 +1,13 @@
 """VELA Research Agent - Gradio Web Demo
 
 HuggingFace Spaces 배포용 Gradio 데모.
-RunPod Serverless 백엔드로 VELA 7B 모델을 실행합니다.
+ZeroGPU 백엔드로 VELA 7B 모델을 실행합니다 (HF Pro 필요).
 
 HuggingFace Spaces 배포 시:
-  1. Spaces 설정에서 SDK를 "gradio"로 선택
-  2. Secrets에 환경변수 추가:
-     - RUNPOD_API_KEY, RUNPOD_ENDPOINT_ID
-     - NAVER_CLIENT_ID_0, NAVER_CLIENT_SECRET_0
-  3. README.md 상단에 HF Spaces 메타데이터 추가 (sdk: gradio)
+  1. Spaces 설정에서 SDK를 "gradio", Hardware를 "ZeroGPU"로 선택
+  2. (선택) Secrets에 검색 API 키 추가:
+     - NAVER_CLIENT_ID_1, NAVER_CLIENT_SECRET_1
+  3. GPU는 @spaces.GPU 데코레이터로 자동 할당
 """
 
 import json
@@ -28,14 +27,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def check_api_keys() -> list[str]:
-    """필수 API 키 설정 확인. 누락된 키 이름 리스트 반환."""
-    missing = []
-    if not os.environ.get("RUNPOD_API_KEY"):
-        missing.append("RUNPOD_API_KEY")
-    if not os.environ.get("RUNPOD_ENDPOINT_ID"):
-        missing.append("RUNPOD_ENDPOINT_ID")
-    return missing
+def get_backend() -> str:
+    """환경에 따른 LLM 백엔드 자동 선택"""
+    if os.environ.get("VELA_LLM_BACKEND"):
+        return os.environ["VELA_LLM_BACKEND"]
+    if os.environ.get("SPACE_ID"):
+        return "zerogpu"
+    if os.environ.get("RUNPOD_API_KEY"):
+        return "runpod"
+    return "zerogpu"
+
+
+BACKEND = get_backend()
+logger.info(f"LLM 백엔드: {BACKEND}")
 
 
 def run_research(query: str, max_iterations: int) -> tuple[str, str, str]:
@@ -43,22 +47,11 @@ def run_research(query: str, max_iterations: int) -> tuple[str, str, str]:
     if not query or not query.strip():
         return "쿼리를 입력해주세요.", "", ""
 
-    # API 키 확인
-    missing = check_api_keys()
-    if missing:
-        msg = (
-            "## API 키 미설정\n\n"
-            "다음 환경변수를 설정해주세요:\n\n"
-            + "\n".join(f"- `{k}`" for k in missing)
-            + "\n\nHuggingFace Spaces: Settings > Secrets에서 추가"
-        )
-        return msg, "", ""
-
     try:
         from vela import ResearchAgent
         from vela.schemas import ResearchOptions
 
-        agent = ResearchAgent(llm_backend="runpod")
+        agent = ResearchAgent(llm_backend=BACKEND)
         options = ResearchOptions(
             max_iterations=int(max_iterations),
             extract_content=True,
