@@ -206,12 +206,15 @@ class ZeroGPUClient:
             attention_mask = inputs["attention_mask"]
             prompt_tokens = input_ids.shape[1]
 
+            # 모델의 generation_config.json 값 준수
+            # (top_k=20, top_p=0.8, repetition_penalty=1.05)
             gen_params = {
                 "max_new_tokens": max_tokens,
                 "temperature": max(temperature, 0.01),
                 "do_sample": temperature > 0,
-                "top_p": 0.9,
-                "repetition_penalty": 1.15,
+                "top_k": 20,
+                "top_p": 0.8,
+                "repetition_penalty": 1.05,
             }
 
             text, completion_tokens = _generate(input_ids, attention_mask, gen_params)
