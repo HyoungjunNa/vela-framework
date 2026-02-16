@@ -1,3 +1,18 @@
+---
+title: VELA Research Agent
+emoji: 📊
+colorFrom: blue
+colorTo: purple
+sdk: gradio
+sdk_version: 5.12.0
+app_file: app.py
+pinned: false
+license: mit
+models:
+  - intrect/VELA
+short_description: Korean Financial Research with 7B LLM
+---
+
 # VELA Framework
 
 [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/intrect/vela-demo)
