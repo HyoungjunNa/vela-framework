@@ -371,6 +371,10 @@ class CoTReasoningEngine:
                 conclusion = re.sub(
                     r"(?:^|\n)\s*저작권자?:.*?(?:\n|$)", "\n", conclusion
                 )
+                # 숫자/N/A만 있는 라인 블록 제거 (테이블 잔해)
+                conclusion = re.sub(
+                    r"(?:\n[\d.,\-%N/A\s]{1,20}){5,}", "\n", conclusion
+                )
                 conclusion = re.sub(r"\n{3,}", "\n\n", conclusion).strip()
 
                 return {
@@ -500,7 +504,7 @@ class CoTReasoningEngine:
                     # 2글자 이하 헤더 or junk 헤더 or 본문 30자 미만 → 스킵
                     if (len(header_text) <= 2
                             or _JUNK_HEADERS.match(header_text.lower())
-                            or (len(body) < 30 and not body)):
+                            or len(body) < 30):
                         pass  # 스킵
                     else:
                         result_lines.append(current_header)
@@ -518,7 +522,7 @@ class CoTReasoningEngine:
             body = "\n".join(current_section_lines).strip()
             if not (len(header_text) <= 2
                     or _JUNK_HEADERS.match(header_text.lower())
-                    or (len(body) < 30 and not body)):
+                    or len(body) < 30):
                 result_lines.append(current_header)
                 result_lines.extend(current_section_lines)
 
