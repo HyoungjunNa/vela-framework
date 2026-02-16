@@ -362,28 +362,9 @@ class CoTReasoningEngine:
                 # 후처리: 섹션 중복 제거 + boilerplate 제거
                 conclusion = self._dedup_sections(conclusion)
                 conclusion = self._remove_boilerplate(conclusion)
+                conclusion = self._truncate_after_conclusion(conclusion)
 
-                # 후처리: 환각된 메타데이터 섹션 제거 (Author, Release Date, 참고 문서 등)
-                conclusion = re.sub(
-                    r"###\s*(?:Author|Release Date|발행일|작성자|참고 문서).*?(?=\n###|\n##|\Z)",
-                    "", conclusion, flags=re.DOTALL,
-                )
-                # 빈 참고 섹션 제거 (##\s*참고\s*\n 뒤에 PDF 파일만 있는 경우)
-                conclusion = re.sub(
-                    r"##\s*참고\s*(?:문서)?\s*\n.*?\.pdf.*?(?=\n##|\Z)",
-                    "", conclusion, flags=re.DOTALL | re.IGNORECASE,
-                )
-
-                # 후처리: 사이드바/보일러플레이트 잔재 제거
-                conclusion = re.sub(
-                    r"(?:^|\n).*?(?:레버리지\s*ETF|관련주|인버스).*?(?:\n|$)",
-                    "\n", conclusion
-                )
-                conclusion = re.sub(
-                    r"(?:^|\n).*?\(\d{6}\)\s*,\s*.*?\(\d{6}\).*?(?:\n|$)",
-                    "\n", conclusion
-                )
-                # 인라인 잡음 제거 (#Tag:, 저작권자: 등)
+                # 후처리: 인라인 잡음 제거
                 conclusion = re.sub(
                     r"(?:^|\n)\s*#?Tag[s]?:.*?(?:\n|$)", "\n", conclusion
                 )
@@ -441,6 +422,36 @@ class CoTReasoningEngine:
             result_lines.append(line)
 
         return "\n".join(result_lines)
+
+    @staticmethod
+    def _truncate_after_conclusion(text: str) -> str:
+        """결론/Conclusion 섹션 이후의 잡음 제거
+
+        7B 모델은 결론 이후 참고 문서, 목표주가, Final Judgment 등
+        무의미한 섹션을 계속 생성함. 결론 섹션 내용까지만 유지.
+        """
+        _CONCLUSION_PAT = re.compile(
+            r"^#{1,3}\s*(?:(?:최종\s*)?결론|투자\s*결론|conclusio[n]?)\s*$",
+            re.IGNORECASE | re.MULTILINE,
+        )
+
+        # 마지막 결론 헤더 찾기
+        matches = list(_CONCLUSION_PAT.finditer(text))
+        if not matches:
+            return text
+
+        last_conclusion = matches[-1]
+        # 결론 이후 다음 ## 헤더(level 2) 위치 찾기 → 결론 본문 끝
+        after_conclusion = text[last_conclusion.end():]
+        next_h2 = re.search(r"\n##\s+", after_conclusion)
+        if next_h2:
+            # 결론 본문까지만 유지
+            return text[:last_conclusion.end() + next_h2.start()].strip()
+        # ## 헤더 없으면 다음 ### 헤더 찾기
+        next_h3 = re.search(r"\n###\s+", after_conclusion)
+        if next_h3:
+            return text[:last_conclusion.end() + next_h3.start()].strip()
+        return text
 
     @staticmethod
     def _remove_boilerplate(text: str) -> str:
