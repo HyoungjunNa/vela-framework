@@ -1,8 +1,8 @@
-"""멀티소스 통합 검색 모듈 (Simplified)
+"""멀티소스 통합 검색 모듈
 
-Web search only:
 - Naver API (실시간 뉴스)
 - DuckDuckGo (글로벌 뉴스)
+- Naver Finance (주가/밸류에이션/수급) — 인증 불필요
 """
 
 import logging
@@ -29,16 +29,19 @@ class ResearchSearchModule:
         self,
         enable_naver: bool = True,
         enable_ddg: bool = True,
+        enable_stock_data: bool = True,
         max_workers: int = 4,
     ):
         """
         Args:
             enable_naver: Naver API 사용 여부
             enable_ddg: DuckDuckGo 사용 여부
+            enable_stock_data: 네이버 증권 주가/수급 데이터 사용 여부
             max_workers: 병렬 처리 워커 수
         """
         self.enable_naver = enable_naver
         self.enable_ddg = enable_ddg
+        self.enable_stock_data = enable_stock_data
         self.max_workers = max_workers
 
         # 검색 도구 초기화
@@ -68,6 +71,11 @@ class ResearchSearchModule:
             except Exception as e:
                 logger.warning(f"DDGSearchTool 초기화 실패: {e}")
 
+        # 네이버 증권 (주가/밸류에이션/수급) — 인증 불필요
+        self.stock_data_available = self.enable_stock_data
+        if self.stock_data_available:
+            logger.info("네이버 증권 데이터 활성화")
+
     def search_all(
         self,
         query: str,
@@ -88,6 +96,8 @@ class ResearchSearchModule:
         """
         if sources is None:
             sources = ["naver", "ddg"]
+            if self.stock_data_available:
+                sources.append("stock_data")
 
         # 종목코드 추출 (없으면 쿼리에서 추출)
         if not stock_code:
@@ -106,6 +116,12 @@ class ResearchSearchModule:
             # DuckDuckGo
             if "ddg" in sources and self.ddg:
                 futures[executor.submit(self._search_ddg, query, max_results)] = "ddg"
+
+            # 네이버 증권 시세/수급 (종목코드 필수)
+            if "stock_data" in sources and self.stock_data_available and stock_code:
+                futures[
+                    executor.submit(self._search_stock_data, stock_code)
+                ] = "stock_data"
 
             # 결과 수집
             for future in as_completed(futures, timeout=30):
@@ -161,6 +177,77 @@ class ResearchSearchModule:
         except Exception as e:
             logger.warning(f"DDG 검색 실패: {e}")
         return sources
+
+    def _search_stock_data(self, stock_code: str) -> List[Source]:
+        """네이버 증권 통합 데이터 조회 (1회 API 호출 → 시세 + 수급 Source 생성)"""
+        from .tools.naver_finance_client import (
+            fetch_stock_integration,
+            parse_deal_trend,
+            parse_total_infos,
+        )
+
+        data = fetch_stock_integration(stock_code)
+        if not data:
+            return []
+
+        stock_name = data.get("stockName") or _REVERSE_MAP.get(stock_code, stock_code)
+        results: List[Source] = []
+
+        # 1. 재무지표 Source (extract_confirmed_data 호환 형식)
+        infos = parse_total_infos(data)
+        if infos:
+            parts = []
+            if v := infos.get("전일"):
+                parts.append(f"현재가: {v}원")
+            if v := infos.get("PER"):
+                parts.append(f"PER(TTM): {v}")
+            if v := infos.get("추정PER"):
+                parts.append(f"추정PER: {v}")
+            if v := infos.get("PBR"):
+                parts.append(f"PBR: {v}")
+            if v := infos.get("EPS"):
+                parts.append(f"EPS: {v}")
+            if v := infos.get("배당수익률"):
+                parts.append(f"배당수익률: {v}")
+            if v := infos.get("시총"):
+                parts.append(f"시총: {v}")
+
+            if parts:
+                results.append(
+                    Source(
+                        title=f"{stock_name} 재무지표 (네이버증권)",
+                        url=f"naver://finance/{stock_code}",
+                        source_type=SourceType.PRICE,
+                        snippet=" | ".join(parts),
+                        relevance_score=0.95,
+                    )
+                )
+
+        # 2. 투자자동향 Source
+        trend = parse_deal_trend(data)
+        if trend:
+            parts = []
+            if v := trend.get("foreign"):
+                parts.append(f"외국인순매수: {v}주")
+            if v := trend.get("institution"):
+                parts.append(f"기관순매수: {v}주")
+            if v := trend.get("individual"):
+                parts.append(f"개인순매수: {v}주")
+            if v := trend.get("foreign_hold_ratio"):
+                parts.append(f"외인소진율: {v}")
+
+            if parts:
+                results.append(
+                    Source(
+                        title=f"{stock_name} 투자자동향 (네이버증권)",
+                        url=f"naver://investor/{stock_code}",
+                        source_type=SourceType.INVESTOR,
+                        snippet=" | ".join(parts),
+                        relevance_score=0.95,
+                    )
+                )
+
+        return results
 
     def _extract_stock_code(self, query: str) -> Optional[str]:
         """쿼리에서 종목코드 추출 (config.STOCK_CODE_MAP 기반)

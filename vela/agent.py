@@ -732,6 +732,8 @@ class ResearchAgent:
 
         # 활성화된 소스 결정
         sources_to_use = ["naver", "ddg"]
+        if self.search.stock_data_available:
+            sources_to_use.append("stock_data")
 
         # 검색 실행
         results = self.search.search_all(
