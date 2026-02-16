@@ -41,6 +41,10 @@ def get_backend() -> str:
 BACKEND = get_backend()
 logger.info(f"LLM 백엔드: {BACKEND}")
 
+# ZeroGPU: @spaces.GPU 데코레이터를 시작 시 등록해야 함
+if BACKEND == "zerogpu":
+    import vela.tools.zerogpu_client  # noqa: F401 — registers @spaces.GPU
+
 
 def run_research(query: str, max_iterations: int) -> tuple[str, str, str]:
     """리서치 실행 후 (markdown, reasoning, raw_json) 튜플 반환."""
