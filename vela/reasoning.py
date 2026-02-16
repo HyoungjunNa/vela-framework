@@ -626,9 +626,11 @@ class CoTReasoningEngine:
 
         result["key_findings"] = key_findings[:5]
 
-        # 2. Confidence 추출
+        # 2. Confidence 추출 (## Confidence: N% 또는 **Confidence: N%** 둘 다 지원)
         conf_match = re.search(
-            r"##?\s*Confidence[:\s]*(\d+(?:\.\d+)?)\s*%?", content, re.IGNORECASE
+            r"(?:##?\s*|\*\*\s*)Confidence[:\s]*(\d+(?:\.\d+)?)\s*%",
+            content,
+            re.IGNORECASE,
         )
         if conf_match:
             conf_val = float(conf_match.group(1))
