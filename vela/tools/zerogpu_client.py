@@ -19,7 +19,19 @@ _ON_SPACES = bool(os.environ.get("SPACE_ID"))
 MODEL_ID = os.environ.get("VELA_MODEL_ID", "intrect/VELA")
 
 # =============================================================================
-# Spaces: 모듈 레벨에서 모델 사전 로드 (ZeroGPU virtual CUDA)
+# spaces 패키지를 CUDA 초기화 전에 먼저 import (ZeroGPU 필수)
+# =============================================================================
+_has_spaces = False
+if _ON_SPACES:
+    try:
+        import spaces
+
+        _has_spaces = True
+    except ImportError:
+        pass
+
+# =============================================================================
+# Spaces: 모듈 레벨에서 모델 사전 로드 (spaces import 후)
 # =============================================================================
 _model = None
 _tokenizer = None
@@ -45,8 +57,7 @@ if _ON_SPACES:
 # =============================================================================
 # @spaces.GPU 데코레이터 (HF Spaces 전용)
 # =============================================================================
-try:
-    import spaces
+if _has_spaces:
 
     @spaces.GPU(duration=120)
     def _generate(input_ids, attention_mask, gen_params):
@@ -61,7 +72,7 @@ try:
         new_tokens = outputs[0][input_ids.shape[1] :]
         return _tokenizer.decode(new_tokens, skip_special_tokens=True), len(new_tokens)
 
-except ImportError:
+else:
 
     def _generate(input_ids, attention_mask, gen_params):
         import torch
