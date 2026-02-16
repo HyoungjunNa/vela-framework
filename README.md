@@ -281,6 +281,28 @@ See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for detailed documentation on:
 - DPO strategy for language purity
 - Benchmark methodology
 
+## Known Limitations
+
+| Category | Limitation | Impact |
+|----------|-----------|--------|
+| **Model Size** | 7B parameter model (Qwen2.5-7B base) | Complex multi-step reasoning may degrade compared to 70B+ models |
+| **Language** | Korean financial domain only | English/multilingual queries produce lower quality output |
+| **Real-time Data** | No direct market data feed (price, volume, orderbook) | Research relies on web search snippets, not live market data |
+| **Valuation** | No financial database integration (e.g., FnGuide, Bloomberg) | Cannot provide real-time PER/PBR/EPS; relies on news-sourced figures |
+| **Search Coverage** | Naver News API + DuckDuckGo only | No access to paywalled sources (증권사 리포트, 유료 DB) |
+| **Content Extraction** | Top 3 sources per search step | Remaining sources provide title + snippet only (no full text) |
+| **Inference Speed** | ~16 tok/s (MLX 4-bit) / ~5 tok/s (CPU BF16) | Full research cycle takes 30-120 seconds depending on iterations |
+| **Repetition** | 7B models may exhibit output repetition | Post-processing mitigates but does not fully eliminate |
+| **Confidence** | Self-reported confidence (not calibrated) | Confidence scores reflect model's subjective estimate, not statistical accuracy |
+| **Temporal** | Training data cutoff affects domain knowledge | Recent events after training may not be reflected in reasoning quality |
+
+### What VELA is NOT
+
+- **Not a trading bot**: VELA generates research reports, not trade signals or orders
+- **Not a financial advisor**: Output is for informational/educational purposes only
+- **Not a real-time system**: Research runs in batch mode (30-120s per query), not streaming
+- **Not a replacement for professional analysis**: Designed to augment, not replace, human judgment
+
 ## Contributing
 
 Contributions are welcome. Please open an issue first to discuss what you would like to change.

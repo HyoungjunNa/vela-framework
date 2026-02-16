@@ -222,6 +222,24 @@ with gr.Blocks(title="VELA Research Agent", theme=gr.themes.Soft()) as demo:
         label="예제 쿼리",
     )
 
+    # Limitations
+    with gr.Accordion("Limitations", open=False):
+        gr.Markdown(
+            "### Known Limitations\n\n"
+            "| 항목 | 설명 |\n"
+            "|------|------|\n"
+            "| **모델 크기** | 7B 파라미터 — 복잡한 다단계 추론은 대형 모델 대비 품질 저하 가능 |\n"
+            "| **언어** | 한국 금융 도메인 전용 — 영어/다국어 쿼리는 품질 저하 |\n"
+            "| **실시간 데이터** | 직접 시세 연동 없음 — 웹 검색 기반 간접 데이터만 사용 |\n"
+            "| **밸류에이션** | 금융 DB 미연동 (FnGuide, Bloomberg 등) — PER/PBR은 뉴스 인용 수치 |\n"
+            "| **검색 범위** | Naver + DuckDuckGo — 유료 DB 및 증권사 리포트 접근 불가 |\n"
+            "| **콘텐츠 추출** | 검색 단계당 상위 3개만 본문 추출 — 나머지는 제목+요약만 |\n"
+            "| **반복 생성** | 7B 모델 특성상 출력 반복 가능 — 후처리로 완화하나 완전 제거는 아님 |\n"
+            "| **신뢰도** | 자기 보고 방식 (calibrated 아님) — 통계적 정확도가 아닌 모델 주관 추정 |\n\n"
+            "**VELA는 투자 조언 도구가 아닙니다.** "
+            "정보 제공/교육 목적으로만 사용하세요. 투자 판단은 전문가와 상담하시기 바랍니다."
+        )
+
     # 이벤트 바인딩
     run_btn.click(
         fn=run_research,
