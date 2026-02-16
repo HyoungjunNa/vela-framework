@@ -427,30 +427,37 @@ class CoTReasoningEngine:
     def _truncate_after_conclusion(text: str) -> str:
         """결론/Conclusion 섹션 이후의 잡음 제거
 
-        7B 모델은 결론 이후 참고 문서, 목표주가, Final Judgment 등
-        무의미한 섹션을 계속 생성함. 결론 섹션 내용까지만 유지.
+        7B 모델은 결론 이후 참고 문서, 테이블, 증권 리포트 텍스트 등
+        무의미한 콘텐츠를 계속 생성함. 결론 본문까지만 유지.
         """
         _CONCLUSION_PAT = re.compile(
-            r"^#{1,3}\s*(?:(?:최종\s*)?결론|투자\s*결론|conclusio[n]?)\s*$",
+            r"^#{1,3}\s*(?:(?:최종\s*)?결론|투자\s*결론|투자\s*의견|conclusio[n]?)\s*$",
             re.IGNORECASE | re.MULTILINE,
         )
 
-        # 마지막 결론 헤더 찾기
         matches = list(_CONCLUSION_PAT.finditer(text))
         if not matches:
             return text
 
         last_conclusion = matches[-1]
-        # 결론 이후 다음 ## 헤더(level 2) 위치 찾기 → 결론 본문 끝
-        after_conclusion = text[last_conclusion.end():]
-        next_h2 = re.search(r"\n##\s+", after_conclusion)
-        if next_h2:
-            # 결론 본문까지만 유지
-            return text[:last_conclusion.end() + next_h2.start()].strip()
-        # ## 헤더 없으면 다음 ### 헤더 찾기
-        next_h3 = re.search(r"\n###\s+", after_conclusion)
-        if next_h3:
-            return text[:last_conclusion.end() + next_h3.start()].strip()
+        after = text[last_conclusion.end():]
+
+        # 1. 다음 헤더에서 자르기
+        next_header = re.search(r"\n#{1,3}\s+", after)
+        if next_header:
+            return text[:last_conclusion.end() + next_header.start()].strip()
+
+        # 2. --- 구분선에서 자르기
+        separator = re.search(r"\n---", after)
+        if separator:
+            return text[:last_conclusion.end() + separator.start()].strip()
+
+        # 3. 결론 본문이 500자 이상이면 첫 번째 빈 줄에서 자르기
+        if len(after) > 500:
+            blank_line = re.search(r"\n\n", after[200:])
+            if blank_line:
+                return text[:last_conclusion.end() + 200 + blank_line.start()].strip()
+
         return text
 
     @staticmethod
