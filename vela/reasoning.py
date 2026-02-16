@@ -522,6 +522,17 @@ class CoTReasoningEngine:
             conf_val = float(conf_match.group(1))
             result["confidence"] = conf_val / 100 if conf_val > 1 else conf_val
 
+        # 프롬프트가 "**Thought**: "로 끝나므로 모델 출력에 **Thought**: 없을 수 있음
+        # → **Action**: 앞 텍스트를 thought로 추출
+        if not result.get("thought") and result.get("action"):
+            pre_action = re.search(
+                r"^(.*?)(?=\*\*Action\*\*:)", content, re.DOTALL
+            )
+            if pre_action and pre_action.group(1).strip():
+                result["thought"] = pre_action.group(1).strip()[:500]
+            else:
+                result["thought"] = content[:200].strip() or "추론 중"
+
         # Markdown 파싱 성공
         if result.get("thought") and result.get("action"):
             logger.debug(f"Markdown 파싱 성공: {list(result.keys())}")
