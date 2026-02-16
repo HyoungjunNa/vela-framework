@@ -375,7 +375,13 @@ class ResearchAgent:
                             sources=sources,
                             previous_findings=intermediate_findings,
                         )
-                        new_findings = analyze_result.get("findings", [])
+                        _raw_findings = analyze_result.get("findings", [])
+                        # 프롬프트 템플릿 복사 필터링
+                        _NOISE_KW = ["구체적 수치", "여기에 작성", "소스에서 확인", "팩트 기반"]
+                        new_findings = [
+                            f for f in _raw_findings
+                            if len(f) > 15 and not any(n in f for n in _NOISE_KW)
+                        ]
                         open_questions = analyze_result.get("open_questions", [])
                         what_is_missing = analyze_result.get("what_is_missing", [])
 
@@ -497,7 +503,17 @@ class ResearchAgent:
             result.reasoning_trace = steps
             result.sources = self._deduplicate_sources(sources)[: options.max_sources]
             result.conclusion = synthesis.get("conclusion", "결론 생성 실패")
-            result.key_findings = synthesis.get("key_findings", [])
+            raw_findings = synthesis.get("key_findings", [])
+            # 프롬프트 템플릿 잔재/메타 텍스트 필터링
+            _TEMPLATE_NOISE = [
+                "구체적 수치", "사실 5", "사실 8", "핵심 포인트",
+                "팩트 기반", "여기에 작성", "소스에서 확인",
+                "작성 확인", "구조", "설명하는",
+            ]
+            result.key_findings = [
+                f for f in raw_findings
+                if len(f) > 15 and not any(noise in f for noise in _TEMPLATE_NOISE)
+            ]
             synth_confidence = synthesis.get("confidence", 0.5)
             # Fallback: synthesis 파싱 실패(0.5 기본값)면 step-level 최대 confidence 사용
             if synth_confidence == 0.5 and steps:
@@ -870,30 +886,17 @@ JSON 형식으로 응답하세요:
 {chr(10).join(f'- {f}' for f in previous_findings) if previous_findings else '없음'}
 
 ## 분석 요청
-위 소스를 **팩트 중심으로** 분석하여 다음 JSON 형식으로 응답하세요:
+위 소스를 **팩트 중심으로** 분석하여 JSON으로 응답하세요.
 
 ```json
 {{
-    "findings": [
-        "구체적 수치가 있는 사실 5~8개"
-    ],
-    "open_questions": [
-        "아직 답변되지 않은 질문"
-    ],
-    "what_is_missing": [
-        "소스에서 확인 불가한 재무수치만 나열 (빈 배열 가능)"
-    ]
+    "findings": ["소스에서 확인된 구체적 사실을 여기에 작성"],
+    "open_questions": ["아직 확인되지 않은 질문을 여기에 작성"],
+    "what_is_missing": []
 }}
 ```
 
-## 중요 규칙
-1. findings는 **5~8개**, 반드시 소스에 기반한 구체적 사실만
-2. 소스에 없는 수치는 절대 추측하지 말 것
-3. what_is_missing 판단 기준:
-   - [재무지표] 소스에 PER/PBR/EPS/BPS가 있으면 → 빈 배열 또는 누락된 것만
-   - 소스에 밸류에이션 데이터가 없으면 → "PER/PBR: 미제공" 추가
-   - 실제 소스를 확인하고 판단할 것 (예시 값 그대로 복사 금지)
-4. 투기적 예측("강세 전망", "상승 예상") 금지 - 팩트만 서술
+반드시 소스에 있는 실제 수치와 팩트만 findings에 포함하세요. 5~8개 작성.
 """
 
         try:

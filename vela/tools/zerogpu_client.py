@@ -148,15 +148,19 @@ class ZeroGPUClient:
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=max(temperature, 0.01),
-                top_p=0.9,
+                top_p=0.92,
+                repetition_penalty=1.3,
                 stop=stop or [],
             )
             elapsed_ms = int((time.time() - start_time) * 1000)
             choice = response.choices[0]
             usage = response.usage
+            content = self._postprocess(
+                (choice.message.content or "").strip(), stop
+            )
             return {
                 "success": True,
-                "content": (choice.message.content or "").strip(),
+                "content": content,
                 "usage": {
                     "prompt_tokens": usage.prompt_tokens if usage else 0,
                     "completion_tokens": usage.completion_tokens if usage else 0,
