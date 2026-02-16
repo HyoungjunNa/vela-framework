@@ -359,8 +359,9 @@ class CoTReasoningEngine:
                         flags=re.DOTALL,
                     ).strip()
 
-                # 후처리: 섹션 중복 제거 (같은 헤더 섹션이 반복되면 첫 번째만 유지)
+                # 후처리: 섹션 중복 제거 + boilerplate 제거
                 conclusion = self._dedup_sections(conclusion)
+                conclusion = self._remove_boilerplate(conclusion)
 
                 # 후처리: 환각된 메타데이터 섹션 제거 (Author, Release Date, 참고 문서 등)
                 conclusion = re.sub(
@@ -431,6 +432,55 @@ class CoTReasoningEngine:
             elif skip_until_next_header:
                 continue
             result_lines.append(line)
+
+        return "\n".join(result_lines)
+
+    @staticmethod
+    def _remove_boilerplate(text: str) -> str:
+        """7B 모델이 생성하는 boilerplate 섹션 제거"""
+        _JUNK_HEADERS = re.compile(
+            r"^(?:legal\s*(?:&|and)\s*compliance|disclaimer|contact\s*information|"
+            r"tag[s]?|action\s*plan|copyright|저작권|면책|연락처|태그)$",
+            re.IGNORECASE,
+        )
+
+        lines = text.split("\n")
+        result_lines = []
+        skip_until_next_header = False
+        current_section_lines = []
+        current_header = None
+
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                # 이전 섹션 flush
+                if current_header is not None:
+                    header_text = re.sub(r"\s+", " ", current_header.lstrip("#").strip())
+                    body = "\n".join(current_section_lines).strip()
+                    # 2글자 이하 헤더 or junk 헤더 or 본문 30자 미만 → 스킵
+                    if (len(header_text) <= 2
+                            or _JUNK_HEADERS.match(header_text.lower())
+                            or (len(body) < 30 and not body)):
+                        pass  # 스킵
+                    else:
+                        result_lines.append(current_header)
+                        result_lines.extend(current_section_lines)
+
+                current_header = line
+                current_section_lines = []
+                skip_until_next_header = False
+            else:
+                current_section_lines.append(line)
+
+        # 마지막 섹션 flush
+        if current_header is not None:
+            header_text = re.sub(r"\s+", " ", current_header.lstrip("#").strip())
+            body = "\n".join(current_section_lines).strip()
+            if not (len(header_text) <= 2
+                    or _JUNK_HEADERS.match(header_text.lower())
+                    or (len(body) < 30 and not body)):
+                result_lines.append(current_header)
+                result_lines.extend(current_section_lines)
 
         return "\n".join(result_lines)
 
