@@ -2,7 +2,7 @@
 
 from typing import Dict, List
 from dataclasses import dataclass
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 
 @dataclass
