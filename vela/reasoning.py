@@ -374,7 +374,7 @@ class CoTReasoningEngine:
                     "", conclusion, flags=re.DOTALL | re.IGNORECASE,
                 )
 
-                # 후처리: 사이드바 잔재 제거 (종목코드 나열, ETF, 관련주)
+                # 후처리: 사이드바/보일러플레이트 잔재 제거
                 conclusion = re.sub(
                     r"(?:^|\n).*?(?:레버리지\s*ETF|관련주|인버스).*?(?:\n|$)",
                     "\n", conclusion
@@ -382,6 +382,13 @@ class CoTReasoningEngine:
                 conclusion = re.sub(
                     r"(?:^|\n).*?\(\d{6}\)\s*,\s*.*?\(\d{6}\).*?(?:\n|$)",
                     "\n", conclusion
+                )
+                # 인라인 잡음 제거 (#Tag:, 저작권자: 등)
+                conclusion = re.sub(
+                    r"(?:^|\n)\s*#?Tag[s]?:.*?(?:\n|$)", "\n", conclusion
+                )
+                conclusion = re.sub(
+                    r"(?:^|\n)\s*저작권자?:.*?(?:\n|$)", "\n", conclusion
                 )
                 conclusion = re.sub(r"\n{3,}", "\n\n", conclusion).strip()
 
@@ -439,8 +446,9 @@ class CoTReasoningEngine:
     def _remove_boilerplate(text: str) -> str:
         """7B 모델이 생성하는 boilerplate 섹션 제거"""
         _JUNK_HEADERS = re.compile(
-            r"^(?:legal\s*(?:&|and)\s*compliance|disclaimer|contact\s*information|"
-            r"tag[s]?|action\s*plan|copyright|저작권|면책|연락처|태그)$",
+            r"^(?:legal(?:\s*(?:&|and)\s*compliance|\s*disclaimer)?|disclaimer|"
+            r"contact(?:\s*information)?|tag[s]?|action\s*plan|copyright|"
+            r"저작권|면책|연락처|태그|핵심\s*키워드|키워드)$",
             re.IGNORECASE,
         )
 
