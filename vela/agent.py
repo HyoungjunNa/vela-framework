@@ -136,6 +136,7 @@ class ResearchAgent:
         options: Optional[ResearchOptions] = None,
         stock_code: Optional[str] = None,
         stock_name: Optional[str] = None,
+        step_callback=None,
     ) -> ResearchResult:
         """메인 리서치 실행
 
@@ -144,6 +145,9 @@ class ResearchAgent:
             options: 리서치 옵션
             stock_code: 종목코드 (선택)
             stock_name: 종목명 (선택)
+            step_callback: 진행상황 콜백 (선택). dict 인자로 호출됨.
+                {"phase": "reasoning"|"searching"|"search_done"|"analyzing"|"concluding"|"synthesizing",
+                 "step": int, "query": str, "sources_found": int, ...}
 
         Returns:
             ResearchResult (JSON 직렬화 가능)
@@ -198,9 +202,17 @@ class ResearchAgent:
             MAX_CONSECUTIVE_SEARCH = 2  # 연속 search 최대 횟수 (2회 후 analyze 강제)
             last_todo_result: Optional[TodoReasoningResult] = None  # 마지막 TODO 결과
 
+            def _cb(info):
+                if step_callback:
+                    try:
+                        step_callback(info)
+                    except Exception:
+                        pass
+
             while iteration < options.max_iterations:
                 iteration += 1
                 logger.info(f"=== 추론 스텝 {iteration} ===")
+                _cb({"phase": "reasoning", "step": iteration})
 
                 # 1. Think: 다음 액션 결정 (TODO 기반)
                 reason_start = time.time()
@@ -281,6 +293,7 @@ class ResearchAgent:
                     )
 
                 if step.action == ActionType.SEARCH and step.query:
+                    _cb({"phase": "searching", "step": iteration, "query": step.query})
                     # vNext: 중복 쿼리 방지
                     if step.query in search_queries_list:
                         logger.warning(f"중복 쿼리 스킵: {step.query}")
@@ -331,6 +344,7 @@ class ResearchAgent:
                     sources.extend(new_sources)
                     step.sources_found = len(new_sources)
                     step.observation = self._summarize_search_results(new_sources)
+                    _cb({"phase": "search_done", "step": iteration, "sources_found": len(new_sources)})
 
                     # 연속 search 횟수 증가
                     consecutive_search_count += 1
@@ -340,6 +354,7 @@ class ResearchAgent:
                     context["search_queries"].append(step.query)
 
                 elif step.action == ActionType.ANALYZE:
+                    _cb({"phase": "analyzing", "step": iteration})
                     # Analyze: 실제 intermediate_findings 생성
                     consecutive_search_count = 0  # analyze 수행 시 연속 search 리셋
 
@@ -371,6 +386,7 @@ class ResearchAgent:
                         step.observation = "분석할 소스 없음 - 검색 필요"
 
                 elif step.action == ActionType.CONCLUDE:
+                    _cb({"phase": "concluding", "step": iteration})
                     # 결론 단계 - 루프 종료
                     step.observation = "충분한 정보 수집 완료"
                     # NOTE: consecutive_search_count 변경은 post_state에서 자동 계산됨
@@ -431,6 +447,7 @@ class ResearchAgent:
             # =================================================================
             # 최종 결론 합성
             # =================================================================
+            _cb({"phase": "synthesizing", "sources_count": len(sources)})
             # 가드레일: pykis/fnguide 소스에서 확보된 데이터를 자동 추출
             # LLM이 판단하지 않고 시스템이 강제로 추출
             from .search import ResearchSearchModule

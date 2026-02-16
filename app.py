@@ -13,6 +13,9 @@ HuggingFace Spaces 배포 시:
 import json
 import logging
 import os
+import queue
+import threading
+import time
 import traceback
 
 import gradio as gr
@@ -46,43 +49,116 @@ if BACKEND == "zerogpu":
     import vela.tools.zerogpu_client  # noqa: F401 — registers @spaces.GPU
 
 
-def run_research(query: str, max_iterations: int) -> tuple[str, str, str]:
-    """리서치 실행 후 (markdown, reasoning, raw_json) 튜플 반환."""
+def run_research(query: str, max_iterations: int):
+    """리서치 실행 — 스트리밍 제너레이터.
+
+    각 추론 단계마다 yield하여 UI에 실시간 진행 상황 표시.
+    """
     if not query or not query.strip():
-        return "쿼리를 입력해주세요.", "", ""
+        yield "쿼리를 입력해주세요.", "", ""
+        return
 
     try:
         from vela import ResearchAgent
         from vela.schemas import ResearchOptions
 
-        agent = ResearchAgent(llm_backend=BACKEND)
-        options = ResearchOptions(
-            max_iterations=int(max_iterations),
-            extract_content=True,
-        )
+        # 진행 상황 큐 (agent callback → generator)
+        progress_q = queue.Queue()
+        result_holder = [None, None]  # [result, error]
 
-        result = agent.research(query=query.strip(), options=options)
+        def on_step(info):
+            progress_q.put(info)
+
+        def _run():
+            try:
+                agent = ResearchAgent(llm_backend=BACKEND)
+                options = ResearchOptions(
+                    max_iterations=int(max_iterations),
+                    extract_content=True,
+                )
+                result_holder[0] = agent.research(
+                    query=query.strip(), options=options, step_callback=on_step,
+                )
+            except Exception as e:
+                result_holder[1] = e
+            finally:
+                progress_q.put({"phase": "done"})
+
+        # 백그라운드 스레드에서 리서치 실행
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+
+        # 진행 상황 표시
+        progress_lines = [f"## 리서치 진행 중: {query.strip()}\n"]
+        start_time = time.time()
+
+        while True:
+            try:
+                info = progress_q.get(timeout=0.5)
+            except queue.Empty:
+                # 타임아웃 — 경과 시간 업데이트만
+                elapsed = int(time.time() - start_time)
+                status = "\n".join(progress_lines) + f"\n\n*{elapsed}초 경과...*"
+                yield status, "", ""
+                continue
+
+            phase = info.get("phase")
+            step = info.get("step", "")
+
+            if phase == "done":
+                break
+            elif phase == "reasoning":
+                progress_lines.append(f"### Step {step}")
+                progress_lines.append("🤔 추론 중...")
+            elif phase == "searching":
+                q = info.get("query", "")
+                progress_lines.append(f"🔍 검색: `{q}`")
+            elif phase == "search_done":
+                n = info.get("sources_found", 0)
+                progress_lines.append(f"✅ **{n}개** 소스 발견\n")
+            elif phase == "analyzing":
+                progress_lines.append("📊 소스 분석 중...")
+            elif phase == "concluding":
+                progress_lines.append("📝 결론 도출 중...")
+            elif phase == "synthesizing":
+                n = info.get("sources_count", 0)
+                progress_lines.append(f"\n### 최종 리포트 생성 중... ({n}개 소스 종합)")
+
+            yield "\n".join(progress_lines), "", ""
+
+        thread.join(timeout=10)
+
+        # 최종 결과
+        result = result_holder[0]
+        error = result_holder[1]
+
+        if error:
+            raise error
+
+        if not result:
+            yield "리서치 결과가 없습니다.", "", ""
+            return
 
         # 1) 마크다운 리포트
         markdown_report = result.to_markdown()
 
         # 2) 추론 과정
         reasoning_lines = []
-        for step in result.reasoning_trace:
-            reasoning_lines.append(f"### Step {step.step_number}")
-            reasoning_lines.append(f"**Thought**: {step.thought}")
-            reasoning_lines.append(f"**Action**: {step.action}")
-            if step.query:
-                reasoning_lines.append(f"**Query**: `{step.query}`")
-            reasoning_lines.append(f"**Observation**: {step.observation}")
-            reasoning_lines.append(f"**Confidence**: {step.confidence:.0%}")
+        for s in result.reasoning_trace:
+            reasoning_lines.append(f"### Step {s.step_number}")
+            reasoning_lines.append(f"**Thought**: {s.thought}")
+            reasoning_lines.append(f"**Action**: {s.action}")
+            if s.query:
+                reasoning_lines.append(f"**Query**: `{s.query}`")
+            reasoning_lines.append(f"**Observation**: {s.observation}")
+            reasoning_lines.append(f"**Confidence**: {s.confidence:.0%}")
             reasoning_lines.append("")
         reasoning_md = "\n".join(reasoning_lines) if reasoning_lines else "추론 과정 없음"
 
         # 3) Raw JSON
         raw_json = json.dumps(result.to_dict(), ensure_ascii=False, indent=2)
 
-        return markdown_report, reasoning_md, raw_json
+        yield markdown_report, reasoning_md, raw_json
 
     except Exception as e:
         logger.error(f"리서치 실패: {e}")
@@ -93,7 +169,7 @@ def run_research(query: str, max_iterations: int) -> tuple[str, str, str]:
             f"```\n{traceback.format_exc()}\n```\n\n"
             f"</details>"
         )
-        return error_md, "", ""
+        yield error_md, "", ""
 
 
 # ============================================================================
