@@ -359,6 +359,11 @@ class CoTReasoningEngine:
                         flags=re.DOTALL,
                     ).strip()
 
+                # 후처리: h2 헤더에서 절단 (결론 본문은 h3만 허용)
+                h2_match = re.search(r"\n##\s+", conclusion)
+                if h2_match:
+                    conclusion = conclusion[:h2_match.start()].strip()
+
                 # 후처리: 섹션 중복 제거 + boilerplate 제거
                 conclusion = self._dedup_sections(conclusion)
                 conclusion = self._remove_boilerplate(conclusion)
@@ -374,6 +379,11 @@ class CoTReasoningEngine:
                 # 숫자/N/A만 있는 라인 블록 제거 (테이블 잔해)
                 conclusion = re.sub(
                     r"(?:\n[\d.,\-%N/A\s]{1,20}){5,}", "\n", conclusion
+                )
+                # 학습데이터 잔여 토큰 제거
+                conclusion = re.sub(
+                    r"\n\s*(?:NEVER|END|STOP|<\|im_end\|>|<\|endoftext\|>)\s*$",
+                    "", conclusion
                 )
                 conclusion = re.sub(r"\n{3,}", "\n\n", conclusion).strip()
 
@@ -484,47 +494,51 @@ class CoTReasoningEngine:
             r"^(?:legal(?:\s*(?:&|and)\s*compliance|\s*disclaimer)?|disclaimer|"
             r"contact(?:\s*information)?|tag[s]?|action\s*plan|copyright|"
             r"executive\s*summary|business\s*description|reference[s]?|"
-            r"투자\s*의견|저작권|면책|연락처|태그|핵심\s*키워드|키워드)$",
+            r"참고\s*(?:문서|리포트|자료)|투자\s*의견|저작권|면책|연락처|태그|"
+            r"핵심\s*키워드|키워드)$",
             re.IGNORECASE,
         )
 
         lines = text.split("\n")
         result_lines = []
-        skip_until_next_header = False
         current_section_lines = []
         current_header = None
+        seen_bodies = set()  # 본문 내용 기반 중복 제거
+
+        def _should_skip(header_text, body):
+            if len(header_text) <= 2:
+                return True
+            if _JUNK_HEADERS.match(header_text.lower()):
+                return True
+            if len(body) < 30:
+                return True
+            # 본문 내용 중복 체크 (공백/구두점 무시)
+            body_key = re.sub(r"[\s\-|:,.]", "", body)[:100]
+            if body_key and body_key in seen_bodies:
+                return True
+            if body_key:
+                seen_bodies.add(body_key)
+            return False
+
+        def _flush_section():
+            if current_header is None:
+                return
+            header_text = re.sub(r"\s+", " ", current_header.lstrip("#").strip())
+            body = "\n".join(current_section_lines).strip()
+            if not _should_skip(header_text, body):
+                result_lines.append(current_header)
+                result_lines.extend(current_section_lines)
 
         for line in lines:
             stripped = line.strip()
             if stripped.startswith("#"):
-                # 이전 섹션 flush
-                if current_header is not None:
-                    header_text = re.sub(r"\s+", " ", current_header.lstrip("#").strip())
-                    body = "\n".join(current_section_lines).strip()
-                    # 2글자 이하 헤더 or junk 헤더 or 본문 30자 미만 → 스킵
-                    if (len(header_text) <= 2
-                            or _JUNK_HEADERS.match(header_text.lower())
-                            or len(body) < 30):
-                        pass  # 스킵
-                    else:
-                        result_lines.append(current_header)
-                        result_lines.extend(current_section_lines)
-
+                _flush_section()
                 current_header = line
                 current_section_lines = []
-                skip_until_next_header = False
             else:
                 current_section_lines.append(line)
 
-        # 마지막 섹션 flush
-        if current_header is not None:
-            header_text = re.sub(r"\s+", " ", current_header.lstrip("#").strip())
-            body = "\n".join(current_section_lines).strip()
-            if not (len(header_text) <= 2
-                    or _JUNK_HEADERS.match(header_text.lower())
-                    or len(body) < 30):
-                result_lines.append(current_header)
-                result_lines.extend(current_section_lines)
+        _flush_section()
 
         return "\n".join(result_lines)
 
