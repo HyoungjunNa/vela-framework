@@ -283,18 +283,30 @@ See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for detailed documentation on:
 
 ## Known Limitations
 
-| Category | Limitation | Impact |
-|----------|-----------|--------|
-| **Model Size** | 7B parameter model (Qwen2.5-7B base) | Complex multi-step reasoning may degrade compared to 70B+ models |
-| **Language** | Korean financial domain only | English/multilingual queries produce lower quality output |
-| **Real-time Data** | No direct market data feed (price, volume, orderbook) | Research relies on web search snippets, not live market data |
-| **Valuation** | No financial database integration (e.g., FnGuide, Bloomberg) | Cannot provide real-time PER/PBR/EPS; relies on news-sourced figures |
-| **Search Coverage** | Naver News API + DuckDuckGo only | No access to paywalled sources (증권사 리포트, 유료 DB) |
-| **Content Extraction** | Top 3 sources per search step | Remaining sources provide title + snippet only (no full text) |
-| **Inference Speed** | ~16 tok/s (MLX 4-bit) / ~5 tok/s (CPU BF16) | Full research cycle takes 30-120 seconds depending on iterations |
-| **Repetition** | 7B models may exhibit output repetition | Post-processing mitigates but does not fully eliminate |
-| **Confidence** | Self-reported confidence (not calibrated) | Confidence scores reflect model's subjective estimate, not statistical accuracy |
-| **Temporal** | Training data cutoff affects domain knowledge | Recent events after training may not be reflected in reasoning quality |
+> This open-source demo uses public search APIs only. See [Production Enhancements](#production-enhancements) for commercial capabilities.
+
+| Category | Limitation | Impact | Production Note |
+|----------|-----------|--------|-----------------|
+| **Model Size** | 7B parameter model (Qwen2.5-7B base) | Complex multi-step reasoning may degrade compared to 70B+ models | |
+| **Language** | Korean financial domain only | English/multilingual queries produce lower quality output | |
+| **Real-time Data** | No direct market data feed (price, volume, orderbook) | Research relies on web search snippets, not live market data | |
+| **Valuation** | No financial database integration (e.g., FnGuide, Bloomberg) | Cannot provide real-time PER/PBR/EPS; relies on news-sourced figures | FnGuide integration available |
+| **Search Coverage** | Naver News API + DuckDuckGo only | No access to paywalled sources (증권사 리포트, 유료 DB) | Securities firm reports in prod |
+| **Content Extraction** | Top 3 sources per search step | Remaining sources provide title + snippet only (no full text) | Full-text extraction in prod |
+| **Inference Speed** | ~16 tok/s (MLX 4-bit) / ~5 tok/s (CPU BF16) | Full research cycle takes 30-120 seconds depending on iterations | |
+| **Repetition** | 7B models may exhibit output repetition | Post-processing mitigates but does not fully eliminate | |
+| **Confidence** | Self-reported confidence (not calibrated) | Confidence scores reflect model's subjective estimate, not statistical accuracy | |
+| **Temporal** | Training data cutoff affects domain knowledge | Recent events after training may not be reflected in reasoning quality | |
+
+### Production Enhancements
+
+In commercial deployments, VELA can integrate:
+- **FnGuide API**: Real-time consensus, target prices, analyst ratings (50+ firms)
+- **Securities firm reports**: Full-text extraction from major Korean brokerages
+- **Financial statements**: 3+ years of balance sheet, cash flow, income statement
+- **Order flow data**: Institutional/foreign investor net buying (real-time)
+
+Contact [hello@intrect.io](mailto:hello@intrect.io) for enterprise features.
 
 ### What VELA is NOT
 
