@@ -464,12 +464,16 @@ class CoTReasoningEngine:
         return "\n".join(parts) if parts else "첫 번째 검색 단계"
 
     def _build_sources_summary(self, sources: List[Source]) -> str:
-        """소스 목록 요약"""
+        """소스 목록 요약 (PRICE/INVESTOR는 confirmed_data로 처리되므로 제외)"""
         if not sources:
             return "수집된 소스 없음"
 
+        # PRICE/INVESTOR 소스는 confirmed_data_section에서 구조화하여 주입
+        _SKIP_TYPES = {"price", "investor"}
+        news_sources = [s for s in sources if s.source_type not in _SKIP_TYPES]
+
         lines = []
-        for i, src in enumerate(sources[:10], 1):
+        for i, src in enumerate(news_sources[:10], 1):
             line = f"{i}. [{src.source_type}] {src.title[:60]}"
             if src.date:
                 line += f" ({src.date})"

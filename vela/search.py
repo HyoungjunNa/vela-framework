@@ -218,7 +218,7 @@ class ResearchSearchModule:
                         title=f"{stock_name} 재무지표 (네이버증권)",
                         url=f"naver://finance/{stock_code}",
                         source_type=SourceType.PRICE,
-                        snippet=" | ".join(parts),
+                        snippet="; ".join(parts),
                         relevance_score=0.95,
                     )
                 )
@@ -242,7 +242,7 @@ class ResearchSearchModule:
                         title=f"{stock_name} 투자자동향 (네이버증권)",
                         url=f"naver://investor/{stock_code}",
                         source_type=SourceType.INVESTOR,
-                        snippet=" | ".join(parts),
+                        snippet="; ".join(parts),
                         relevance_score=0.95,
                     )
                 )
