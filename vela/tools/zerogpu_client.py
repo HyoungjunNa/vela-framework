@@ -212,7 +212,6 @@ class ZeroGPUClient:
                 "do_sample": temperature > 0,
                 "top_p": 0.9,
                 "repetition_penalty": 1.15,
-                "no_repeat_ngram_size": 6,
             }
 
             text, completion_tokens = _generate(input_ids, attention_mask, gen_params)
