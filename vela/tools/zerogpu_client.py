@@ -63,6 +63,11 @@ if _has_spaces:
     def _generate(input_ids, attention_mask, gen_params):
         import torch
 
+        # ZeroGPU가 모델을 CUDA로 옮긴 후 입력도 같은 디바이스로 이동
+        device = next(_model.parameters()).device
+        input_ids = input_ids.to(device)
+        attention_mask = attention_mask.to(device)
+
         with torch.no_grad():
             outputs = _model.generate(
                 input_ids=input_ids,
@@ -76,6 +81,10 @@ else:
 
     def _generate(input_ids, attention_mask, gen_params):
         import torch
+
+        device = next(_model.parameters()).device
+        input_ids = input_ids.to(device)
+        attention_mask = attention_mask.to(device)
 
         with torch.no_grad():
             outputs = _model.generate(
@@ -172,8 +181,8 @@ class ZeroGPUClient:
                 add_generation_prompt=True,
             )
             inputs = _tokenizer(input_text, return_tensors="pt")
-            input_ids = inputs["input_ids"].to(_model.device)
-            attention_mask = inputs["attention_mask"].to(_model.device)
+            input_ids = inputs["input_ids"]  # CPU에서 준비, _generate 안에서 GPU로 이동
+            attention_mask = inputs["attention_mask"]
             prompt_tokens = input_ids.shape[1]
 
             gen_params = {
