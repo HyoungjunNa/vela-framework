@@ -339,7 +339,7 @@ class CoTReasoningEngine:
                     {"role": "system", "content": RESEARCH_SYNTHESIS_PROMPT},
                     {"role": "user", "content": synthesis_prompt},
                 ],
-                max_tokens=4096,
+                max_tokens=2048,
                 temperature=0.5,
             )
 
@@ -392,6 +392,12 @@ class CoTReasoningEngine:
     @staticmethod
     def _dedup_sections(text: str) -> str:
         """마크다운 헤더 기준으로 섹션 중복 제거 (첫 번째만 유지)"""
+        # 결론 유사 헤더 정규화 (결론, 최종 결론, 리포트 결론, conclusio 등)
+        _CONCLUSION_VARIANTS = re.compile(
+            r"^(최종\s*)?결론$|^리포트\s*결론$|^투자\s*결론$|^conclusio[n]?$",
+            re.IGNORECASE,
+        )
+
         lines = text.split("\n")
         seen_headers = set()
         result_lines = []
@@ -400,9 +406,11 @@ class CoTReasoningEngine:
         for line in lines:
             stripped = line.strip()
             if stripped.startswith("#"):
-                # 헤더 정규화 (공백, 대소문자 무시)
                 header_key = re.sub(r"\s+", " ", stripped.lstrip("#").strip()).lower()
-                if header_key and len(header_key) > 3:
+                if header_key:
+                    # 결론 유사 헤더는 모두 "결론"으로 정규화
+                    if _CONCLUSION_VARIANTS.match(header_key):
+                        header_key = "결론"
                     if header_key in seen_headers:
                         skip_until_next_header = True
                         continue

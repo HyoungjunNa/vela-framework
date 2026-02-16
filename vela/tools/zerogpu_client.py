@@ -175,7 +175,7 @@ class ZeroGPUClient:
 
     @staticmethod
     def _postprocess(text: str, stop: Optional[List[str]] = None) -> str:
-        """출력 후처리: stop sequence 절단 + 기본 반복 패턴 제거"""
+        """출력 후처리: stop sequence 절단 + 반복 패턴 제거"""
         # 1. Stop sequence에서 절단
         if stop:
             for seq in stop:
@@ -190,6 +190,11 @@ class ZeroGPUClient:
 
         # 3. 중국어/일본어 구두점 반복 제거 (，、。等)
         text = re.sub(r'[，、。；：！？]{3,}', '', text)
+
+        # 4. 문단/문장 단위 반복 제거 (20자+ 동일 블록이 3회 이상)
+        para_repeat = re.search(r'(.{20,}?)\1{2,}', text, re.DOTALL)
+        if para_repeat:
+            text = text[:para_repeat.start() + len(para_repeat.group(1))]
 
         return text.strip()
 
