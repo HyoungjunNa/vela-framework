@@ -19,9 +19,6 @@ logger = logging.getLogger(__name__)
 _ON_SPACES = bool(os.environ.get("SPACE_ID"))
 MODEL_ID = os.environ.get("VELA_MODEL_ID", "intrect/VELA")
 
-# Qwen2.5 EOS tokens: <|im_end|>=151645, <|endoftext|>=151643
-_QWEN_EOS_TOKEN_IDS = [151645, 151643]
-
 # =============================================================================
 # spaces 패키지를 CUDA 초기화 전에 먼저 import (ZeroGPU 필수)
 # =============================================================================
@@ -177,17 +174,6 @@ class ZeroGPUClient:
             }
 
     @staticmethod
-    def _build_eos_token_ids(stop: Optional[List[str]] = None) -> List[int]:
-        """EOS token ID 목록 구성 (Qwen 기본 + caller stop sequences)"""
-        eos_ids = list(_QWEN_EOS_TOKEN_IDS)
-        if stop and _tokenizer:
-            for seq in stop:
-                token_ids = _tokenizer.encode(seq, add_special_tokens=False)
-                if len(token_ids) == 1:
-                    eos_ids.append(token_ids[0])
-        return list(set(eos_ids))
-
-    @staticmethod
     def _postprocess(text: str, stop: Optional[List[str]] = None) -> str:
         """출력 후처리: stop sequence 절단 + 반복 패턴 제거"""
         # 1. Stop sequence에서 절단
@@ -197,8 +183,11 @@ class ZeroGPUClient:
                 if idx >= 0:
                     text = text[:idx]
 
-        # 2. 반복 패턴 감지/제거 (같은 문자 10회 이상 연속)
-        text = re.sub(r'(.)\1{9,}', '', text)
+        # 2. 반복 패턴 감지/절단 (같은 1-3자 패턴이 10회 이상 반복)
+        repeat_match = re.search(r'(.{1,3})\1{9,}', text)
+        if repeat_match:
+            text = text[:repeat_match.start()]
+
         # 3. 중국어/일본어 구두점 반복 제거 (，、。等)
         text = re.sub(r'[，、。；：！？]{3,}', '', text)
 
@@ -223,7 +212,7 @@ class ZeroGPUClient:
                 "do_sample": temperature > 0,
                 "top_p": 0.9,
                 "repetition_penalty": 1.15,
-                "eos_token_id": self._build_eos_token_ids(stop),
+                "no_repeat_ngram_size": 6,
             }
 
             text, completion_tokens = _generate(input_ids, attention_mask, gen_params)
