@@ -341,6 +341,7 @@ class CoTReasoningEngine:
                 ],
                 max_tokens=2048,
                 temperature=0.5,
+                stop=["\nH:", "\nQ:", "\nUser:", "\nHuman:"],
             )
 
             if result.get("success"):
@@ -360,6 +361,17 @@ class CoTReasoningEngine:
 
                 # 후처리: 섹션 중복 제거 (같은 헤더 섹션이 반복되면 첫 번째만 유지)
                 conclusion = self._dedup_sections(conclusion)
+
+                # 후처리: 환각된 메타데이터 섹션 제거 (Author, Release Date, 참고 문서 등)
+                conclusion = re.sub(
+                    r"###\s*(?:Author|Release Date|발행일|작성자|참고 문서).*?(?=\n###|\n##|\Z)",
+                    "", conclusion, flags=re.DOTALL,
+                )
+                # 빈 참고 섹션 제거 (##\s*참고\s*\n 뒤에 PDF 파일만 있는 경우)
+                conclusion = re.sub(
+                    r"##\s*참고\s*(?:문서)?\s*\n.*?\.pdf.*?(?=\n##|\Z)",
+                    "", conclusion, flags=re.DOTALL | re.IGNORECASE,
+                )
 
                 # 후처리: 사이드바 잔재 제거 (종목코드 나열, ETF, 관련주)
                 conclusion = re.sub(
