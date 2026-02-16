@@ -409,7 +409,7 @@ class CoTReasoningEngine:
         """마크다운 헤더 기준으로 섹션 중복 제거 (첫 번째만 유지)"""
         # 결론 유사 헤더 정규화 (결론, 최종 결론, 리포트 결론, conclusio 등)
         _CONCLUSION_VARIANTS = re.compile(
-            r"^(최종\s*)?결론$|^리포트\s*결론$|^투자\s*결론$|^conclusio[n]?$",
+            r"^(최종\s*)?결론$|^리포트\s*결론$|^투자\s*결론$|^conclusions?$",
             re.IGNORECASE,
         )
         # 영한 동의 헤더 정규화 (중복 제거용)
@@ -458,7 +458,7 @@ class CoTReasoningEngine:
         """
         _CONCLUSION_PAT = re.compile(
             r"^#{1,3}\s*(?:(?:최종\s*)?결론|투자\s*결론|"
-            r"conclusio[n]?(?:s?\s*(?:and|&)\s*key\s*takeaways?)?)\s*$",
+            r"conclusions?(?:\s*(?:and|&)\s*key\s*takeaways?)?)\s*$",
             re.IGNORECASE | re.MULTILINE,
         )
 
@@ -494,8 +494,8 @@ class CoTReasoningEngine:
             r"^(?:legal(?:\s*(?:&|and)\s*compliance|\s*disclaimer)?|disclaimer|"
             r"contact(?:\s*information)?|tag[s]?|action\s*plan|copyright|"
             r"executive\s*summary|business\s*description|reference[s]?|"
-            r"참고\s*(?:문서|리포트|자료)|투자\s*의견|저작권|면책|연락처|태그|"
-            r"핵심\s*키워드|키워드)$",
+            r"참고\s*(?:문서|리포트|자료)|투자\s*의견|key\s*takeaways?|"
+            r"저작권|면책|연락처|태그|핵심\s*키워드|키워드)$",
             re.IGNORECASE,
         )
 
@@ -512,8 +512,8 @@ class CoTReasoningEngine:
                 return True
             if len(body) < 30:
                 return True
-            # 본문 내용 중복 체크 (공백/구두점 무시)
-            body_key = re.sub(r"[\s\-|:,.]", "", body)[:100]
+            # 본문 내용 중복 체크 (공백/구두점/숫자 무시)
+            body_key = re.sub(r"[\s\d\-|:,.\(\)]", "", body)[:100]
             if body_key and body_key in seen_bodies:
                 return True
             if body_key:
