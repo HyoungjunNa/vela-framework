@@ -188,10 +188,13 @@ class ZeroGPUClient:
         if repeat_match:
             text = text[:repeat_match.start()]
 
-        # 3. 중국어/일본어 구두점 반복 제거 (，、。等)
+        # 3. 콤마 구분 어구 반복 제거 ("X, X, X, X" → "X")
+        text = re.sub(r'([\w가-힣]{2,15}(?:[·\s][\w가-힣]+)?)(?:[,，]\s*\1){2,}', r'\1', text)
+
+        # 4. 중국어/일본어 구두점 반복 제거 (，、。等)
         text = re.sub(r'[，、。；：！？]{3,}', '', text)
 
-        # 4. 문단/문장 단위 반복 제거 (20자+ 동일 블록이 3회 이상)
+        # 5. 문단/문장 단위 반복 제거 (20자+ 동일 블록이 3회 이상)
         para_repeat = re.search(r'(.{20,}?)\1{2,}', text, re.DOTALL)
         if para_repeat:
             text = text[:para_repeat.start() + len(para_repeat.group(1))]

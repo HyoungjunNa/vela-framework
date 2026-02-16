@@ -398,6 +398,15 @@ class CoTReasoningEngine:
             r"^(최종\s*)?결론$|^리포트\s*결론$|^투자\s*결론$|^conclusio[n]?$",
             re.IGNORECASE,
         )
+        # 영한 동의 헤더 정규화 (중복 제거용)
+        _BILINGUAL_MAP = {
+            "risk factor": "리스크",
+            "risk factors": "리스크",
+            "리스크 요인": "리스크",
+            "key metrics": "지표",
+            "핵심 지표": "지표",
+            "재무 지표": "지표",
+        }
 
         lines = text.split("\n")
         seen_headers = set()
@@ -412,6 +421,9 @@ class CoTReasoningEngine:
                     # 결론 유사 헤더는 모두 "결론"으로 정규화
                     if _CONCLUSION_VARIANTS.match(header_key):
                         header_key = "결론"
+                    # 영한 동의어 정규화
+                    elif header_key in _BILINGUAL_MAP:
+                        header_key = _BILINGUAL_MAP[header_key]
                     if header_key in seen_headers:
                         skip_until_next_header = True
                         continue
@@ -431,7 +443,7 @@ class CoTReasoningEngine:
         무의미한 콘텐츠를 계속 생성함. 결론 본문까지만 유지.
         """
         _CONCLUSION_PAT = re.compile(
-            r"^#{1,3}\s*(?:(?:최종\s*)?결론|투자\s*결론|투자\s*의견|"
+            r"^#{1,3}\s*(?:(?:최종\s*)?결론|투자\s*결론|"
             r"conclusio[n]?(?:s?\s*(?:and|&)\s*key\s*takeaways?)?)\s*$",
             re.IGNORECASE | re.MULTILINE,
         )
@@ -467,7 +479,8 @@ class CoTReasoningEngine:
         _JUNK_HEADERS = re.compile(
             r"^(?:legal(?:\s*(?:&|and)\s*compliance|\s*disclaimer)?|disclaimer|"
             r"contact(?:\s*information)?|tag[s]?|action\s*plan|copyright|"
-            r"저작권|면책|연락처|태그|핵심\s*키워드|키워드)$",
+            r"executive\s*summary|business\s*description|reference[s]?|"
+            r"투자\s*의견|저작권|면책|연락처|태그|핵심\s*키워드|키워드)$",
             re.IGNORECASE,
         )
 
