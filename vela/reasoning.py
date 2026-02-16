@@ -327,6 +327,9 @@ class CoTReasoningEngine:
 
 {confirmed_data_section}
 
+리포트 마지막에 반드시 다음 형식으로 신뢰도를 기재하세요:
+## Confidence: N%
+
 ## Key Findings
 - """
 

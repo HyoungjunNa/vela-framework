@@ -12,6 +12,7 @@ Think → Search → Analyze → (반복) → Conclude
 
 import json
 import logging
+import re as _re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -201,6 +202,7 @@ class ResearchAgent:
             intermediate_findings: List[str] = []  # analyze에서 생성된 중간 발견
             MAX_CONSECUTIVE_SEARCH = 2  # 연속 search 최대 횟수 (2회 후 analyze 강제)
             last_todo_result: Optional[TodoReasoningResult] = None  # 마지막 TODO 결과
+            _diversify_idx = 0  # 쿼리 다양화 인덱스
 
             def _cb(info):
                 if step_callback:
@@ -293,15 +295,24 @@ class ResearchAgent:
                     )
 
                 if step.action == ActionType.SEARCH and step.query:
-                    _cb({"phase": "searching", "step": iteration, "query": step.query})
-                    # vNext: 중복 쿼리 방지
+                    # 중복 쿼리 → 자동 다양화 (aspect 키워드 추가)
                     if step.query in search_queries_list:
-                        logger.warning(f"중복 쿼리 스킵: {step.query}")
-                        step.observation = f"중복 쿼리 '{step.query}' - 스킵됨"
-                        step.sources_found = 0
-                        steps.append(step)
-                        context["previous_steps"] = steps
-                        continue
+                        diversified = self._diversify_query(
+                            step.query, search_queries_list, _diversify_idx
+                        )
+                        if diversified:
+                            logger.info(f"쿼리 다양화: '{step.query}' → '{diversified}'")
+                            step.query = diversified
+                            _diversify_idx += 1
+                        else:
+                            logger.warning(f"중복 쿼리 스킵 (다양화 소진): {step.query}")
+                            step.observation = f"중복 쿼리 '{step.query}' - 스킵됨"
+                            step.sources_found = 0
+                            steps.append(step)
+                            context["previous_steps"] = steps
+                            continue
+
+                    _cb({"phase": "searching", "step": iteration, "query": step.query})
 
                     # 검색 실행
                     search_start = time.time()
@@ -487,7 +498,14 @@ class ResearchAgent:
             result.sources = self._deduplicate_sources(sources)[: options.max_sources]
             result.conclusion = synthesis.get("conclusion", "결론 생성 실패")
             result.key_findings = synthesis.get("key_findings", [])
-            result.confidence = synthesis.get("confidence", 0.5)
+            synth_confidence = synthesis.get("confidence", 0.5)
+            # Fallback: synthesis 파싱 실패(0.5 기본값)면 step-level 최대 confidence 사용
+            if synth_confidence == 0.5 and steps:
+                step_max = max(s.confidence for s in steps)
+                if step_max > 0.5:
+                    synth_confidence = step_max
+                    logger.info(f"Synthesis confidence fallback: step max {step_max:.0%}")
+            result.confidence = synth_confidence
 
             # 디버깅/학습용 필드 (직접 접근 가능하도록)
             result.trajectory = trajectory
@@ -628,6 +646,57 @@ class ResearchAgent:
             result.metadata.elapsed_seconds = time.time() - start_time
 
         return result
+
+    # 쿼리 다양화용 aspect 키워드 (DB 불필요, 도메인 지식 기반)
+    _SEARCH_ASPECTS = [
+        "실적 매출 영업이익",
+        "수급 외국인 기관",
+        "경쟁사 시장점유율",
+        "리스크 우려 규제",
+        "밸류에이션 PER PBR",
+        "산업 동향 트렌드",
+        "신사업 성장동력",
+        "배당 주주환원",
+    ]
+
+    def _diversify_query(
+        self,
+        original_query: str,
+        used_queries: List[str],
+        idx: int,
+    ) -> Optional[str]:
+        """중복 쿼리를 aspect 키워드로 다양화
+
+        Args:
+            original_query: 원본 쿼리
+            used_queries: 이미 사용된 쿼리 목록
+            idx: 다양화 인덱스 (몇 번째 다양화인지)
+
+        Returns:
+            다양화된 쿼리, 또는 None (모든 aspect 소진 시)
+        """
+        # 쿼리에서 핵심 주제 추출 (종목명 + 핵심어)
+        subject = self.search.resolve_stock_code(original_query)
+        if subject:
+            # 종목코드 → 종목명 변환
+            stock_name = self.search.get_stock_name(subject)
+            if stock_name:
+                subject = stock_name
+
+        # 종목명 없으면 쿼리 앞 2어절 사용
+        if not subject:
+            words = original_query.split()[:2]
+            subject = " ".join(words)
+
+        # aspect 순회
+        aspects = self._SEARCH_ASPECTS
+        for i in range(len(aspects)):
+            aspect_idx = (idx + i) % len(aspects)
+            candidate = f"{subject} {aspects[aspect_idx]}"
+            if candidate not in used_queries:
+                return candidate
+
+        return None
 
     def _execute_search(
         self,
