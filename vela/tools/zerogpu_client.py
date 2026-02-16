@@ -10,6 +10,7 @@ RunPodClient 호환 인터페이스:
 
 import logging
 import os
+import re
 import time
 from typing import Dict, List, Optional
 
@@ -17,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 _ON_SPACES = bool(os.environ.get("SPACE_ID"))
 MODEL_ID = os.environ.get("VELA_MODEL_ID", "intrect/VELA")
+
+# Qwen2.5 EOS tokens: <|im_end|>=151645, <|endoftext|>=151643
+_QWEN_EOS_TOKEN_IDS = [151645, 151643]
 
 # =============================================================================
 # spaces 패키지를 CUDA 초기화 전에 먼저 import (ZeroGPU 필수)
@@ -172,6 +176,34 @@ class ZeroGPUClient:
                 "execution_time": int((time.time() - start_time) * 1000),
             }
 
+    @staticmethod
+    def _build_eos_token_ids(stop: Optional[List[str]] = None) -> List[int]:
+        """EOS token ID 목록 구성 (Qwen 기본 + caller stop sequences)"""
+        eos_ids = list(_QWEN_EOS_TOKEN_IDS)
+        if stop and _tokenizer:
+            for seq in stop:
+                token_ids = _tokenizer.encode(seq, add_special_tokens=False)
+                if len(token_ids) == 1:
+                    eos_ids.append(token_ids[0])
+        return list(set(eos_ids))
+
+    @staticmethod
+    def _postprocess(text: str, stop: Optional[List[str]] = None) -> str:
+        """출력 후처리: stop sequence 절단 + 반복 패턴 제거"""
+        # 1. Stop sequence에서 절단
+        if stop:
+            for seq in stop:
+                idx = text.find(seq)
+                if idx >= 0:
+                    text = text[:idx]
+
+        # 2. 반복 패턴 감지/제거 (같은 문자 10회 이상 연속)
+        text = re.sub(r'(.)\1{9,}', '', text)
+        # 3. 중국어/일본어 구두점 반복 제거 (，、。等)
+        text = re.sub(r'[，、。；：！？]{3,}', '', text)
+
+        return text.strip()
+
     def _chat_spaces_local(self, messages, max_tokens, temperature, stop) -> Dict:
         start_time = time.time()
         try:
@@ -190,15 +222,17 @@ class ZeroGPUClient:
                 "temperature": max(temperature, 0.01),
                 "do_sample": temperature > 0,
                 "top_p": 0.9,
-                "repetition_penalty": 1.1,
+                "repetition_penalty": 1.15,
+                "eos_token_id": self._build_eos_token_ids(stop),
             }
 
             text, completion_tokens = _generate(input_ids, attention_mask, gen_params)
+            text = self._postprocess(text, stop)
 
             elapsed_ms = int((time.time() - start_time) * 1000)
             return {
                 "success": True,
-                "content": text.strip(),
+                "content": text,
                 "usage": {
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
