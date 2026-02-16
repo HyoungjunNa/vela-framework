@@ -114,7 +114,19 @@ class ContentExtractor:
             soup = BeautifulSoup(response.text, "html.parser")
 
             # 불필요한 요소 제거
-            for tag in soup.find_all(["script", "style", "nav", "footer", "aside"]):
+            for tag in soup.find_all(["script", "style", "nav", "footer", "aside",
+                                       "header", "iframe", "form"]):
+                tag.decompose()
+
+            # 사이드바/위젯 영역 제거 (class/id 기반)
+            _SIDEBAR_PATTERNS = re.compile(
+                r"(sidebar|widget|related|recommend|ranking|popular|"
+                r"stock_list|etf|ad[-_]|banner|comment|reply|sns|share)",
+                re.IGNORECASE,
+            )
+            for tag in soup.find_all(True, {"class": _SIDEBAR_PATTERNS}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"id": _SIDEBAR_PATTERNS}):
                 tag.decompose()
 
             # 도메인별 선택자 사용
@@ -131,12 +143,18 @@ class ContentExtractor:
 
             if not content:
                 # Fallback: 가장 긴 텍스트 블록 찾기
+                # 종목코드/ETF/관련주 위젯 텍스트 제외
+                _NOISE = re.compile(
+                    r"(\(\d{6}\).*,\s*){2,}|레버리지\s*ETF|관련주|"
+                    r"인버스|종목\s*토론|실시간\s*검색|많이\s*본\s*뉴스"
+                )
                 paragraphs = soup.find_all("p")
                 if paragraphs:
                     content = "\n".join(
                         p.get_text(strip=True)
                         for p in paragraphs
                         if len(p.get_text(strip=True)) > 50
+                        and not _NOISE.search(p.get_text(strip=True))
                     )
 
             if content:

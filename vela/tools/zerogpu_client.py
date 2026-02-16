@@ -194,8 +194,34 @@ class ZeroGPUClient:
         # 4. 문단/문장 단위 반복 제거 (20자+ 동일 블록이 2회 이상)
         para_repeat = re.search(r'(.{20,}?)\1{2,}', text, re.DOTALL)
         if para_repeat:
-            # 반복 시작점에서 첫 번째 블록만 남김
             text = text[:para_repeat.start() + len(para_repeat.group(1))]
+
+        # 5. 섹션 단위 중복 제거 (줄 단위로 동일 블록 반복 감지)
+        lines = text.split('\n')
+        if len(lines) > 10:
+            seen_blocks = set()
+            deduped = []
+            block = []
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith(('#', '##', '###')) and block:
+                    block_text = '\n'.join(block).strip()
+                    if len(block_text) > 30:
+                        block_key = block_text[:80]
+                        if block_key in seen_blocks:
+                            block = [line]
+                            continue
+                        seen_blocks.add(block_key)
+                    deduped.extend(block)
+                    block = [line]
+                else:
+                    block.append(line)
+            if block:
+                block_text = '\n'.join(block).strip()
+                block_key = block_text[:80] if len(block_text) > 30 else ""
+                if not block_key or block_key not in seen_blocks:
+                    deduped.extend(block)
+            text = '\n'.join(deduped)
 
         return text.strip()
 
@@ -212,15 +238,13 @@ class ZeroGPUClient:
             attention_mask = inputs["attention_mask"]
             prompt_tokens = input_ids.shape[1]
 
-            # 모델의 generation_config.json 값 준수
-            # (top_k=20, top_p=0.8, repetition_penalty=1.05)
             gen_params = {
                 "max_new_tokens": max_tokens,
                 "temperature": max(temperature, 0.01),
                 "do_sample": temperature > 0,
-                "top_k": 20,
-                "top_p": 0.8,
-                "repetition_penalty": 1.05,
+                "top_k": 50,
+                "top_p": 0.92,
+                "repetition_penalty": 1.3,
             }
 
             text, completion_tokens = _generate(input_ids, attention_mask, gen_params)

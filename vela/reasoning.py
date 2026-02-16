@@ -358,6 +358,20 @@ class CoTReasoningEngine:
                         flags=re.DOTALL,
                     ).strip()
 
+                # 후처리: 섹션 중복 제거 (같은 헤더 섹션이 반복되면 첫 번째만 유지)
+                conclusion = self._dedup_sections(conclusion)
+
+                # 후처리: 사이드바 잔재 제거 (종목코드 나열, ETF, 관련주)
+                conclusion = re.sub(
+                    r"(?:^|\n).*?(?:레버리지\s*ETF|관련주|인버스).*?(?:\n|$)",
+                    "\n", conclusion
+                )
+                conclusion = re.sub(
+                    r"(?:^|\n).*?\(\d{6}\)\s*,\s*.*?\(\d{6}\).*?(?:\n|$)",
+                    "\n", conclusion
+                )
+                conclusion = re.sub(r"\n{3,}", "\n\n", conclusion).strip()
+
                 return {
                     "conclusion": conclusion,
                     "key_findings": parsed.get("key_findings", []),
@@ -374,6 +388,31 @@ class CoTReasoningEngine:
             "confidence": 0.3,
             "data_gaps": what_is_missing or [],
         }
+
+    @staticmethod
+    def _dedup_sections(text: str) -> str:
+        """마크다운 헤더 기준으로 섹션 중복 제거 (첫 번째만 유지)"""
+        lines = text.split("\n")
+        seen_headers = set()
+        result_lines = []
+        skip_until_next_header = False
+
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                # 헤더 정규화 (공백, 대소문자 무시)
+                header_key = re.sub(r"\s+", " ", stripped.lstrip("#").strip()).lower()
+                if header_key and len(header_key) > 3:
+                    if header_key in seen_headers:
+                        skip_until_next_header = True
+                        continue
+                    seen_headers.add(header_key)
+                skip_until_next_header = False
+            elif skip_until_next_header:
+                continue
+            result_lines.append(line)
+
+        return "\n".join(result_lines)
 
     def _extract_query_subject(self, query: str) -> str:
         """쿼리에서 주요 주제/종목 추출"""
