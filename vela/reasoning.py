@@ -353,10 +353,11 @@ class CoTReasoningEngine:
                         flags=re.DOTALL,
                     ).strip()
 
-                # 후처리: 섹션 중복 제거 + boilerplate 제거
-                # NOTE: EOD 형식은 h2 헤더 기반이므로 h2 절단 로직 제거됨
+                # 후처리: 섹션 중복 제거
+                # NOTE: EOD 형식 - _remove_boilerplate 제거
+                #   len(body)<30 필터가 "N/A" 값의 밸류에이션 섹션을 날리고,
+                #   body_key 중복 필터가 같은 종목 설명으로 시작하는 섹션을 오탐 제거함
                 conclusion = self._dedup_sections(conclusion)
-                conclusion = self._remove_boilerplate(conclusion)
                 conclusion = self._truncate_after_conclusion(conclusion)
 
                 # 후처리: 인라인 잡음 제거
