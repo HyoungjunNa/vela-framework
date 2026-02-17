@@ -325,13 +325,7 @@ class CoTReasoningEngine:
 ## 수집된 데이터
 {sources_summary}
 
-{confirmed_data_section}
-
-리포트 마지막에 반드시 다음 형식으로 신뢰도를 기재하세요:
-## Confidence: N%
-
-## Key Findings
-- """
+{confirmed_data_section}"""
 
         try:
             result = self.llm.chat(
@@ -636,12 +630,12 @@ class CoTReasoningEngine:
         news_sources = [s for s in sources if s.source_type not in _SKIP_TYPES]
 
         lines = []
-        for i, src in enumerate(news_sources[:10], 1):
-            line = f"{i}. [{src.source_type}] {src.title[:60]}"
+        for i, src in enumerate(news_sources[:20], 1):
+            line = f"{i}. [{src.source_type}] {src.title[:80]}"
             if src.date:
                 line += f" ({src.date})"
             if src.snippet:
-                line += f"\n   {src.snippet[:100]}..."
+                line += f"\n   {src.snippet[:200]}"
             lines.append(line)
 
         return "\n".join(lines)
