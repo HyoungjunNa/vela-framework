@@ -76,8 +76,16 @@ class NewsVectorFilter:
             return self._client
 
         try:
+            import os
             from huggingface_hub import InferenceClient
-            self._client = InferenceClient(model=_MODEL_NAME)
+
+            # HF Spaces는 HF_TOKEN 자동 주입; 없으면 None (공개 모델은 토큰 없이 불가)
+            token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
+            if not token:
+                logger.warning("[VectorFilter] HF_TOKEN 없음 → 벡터 필터 비활성화")
+                return None
+
+            self._client = InferenceClient(model=_MODEL_NAME, token=token)
             logger.info(f"[VectorFilter] HF InferenceClient 초기화: {_MODEL_NAME}")
             return self._client
         except Exception as e:
