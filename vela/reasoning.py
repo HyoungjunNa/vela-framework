@@ -359,12 +359,8 @@ class CoTReasoningEngine:
                         flags=re.DOTALL,
                     ).strip()
 
-                # 후처리: h2 헤더에서 절단 (결론 본문은 h3만 허용)
-                h2_match = re.search(r"\n##\s+", conclusion)
-                if h2_match:
-                    conclusion = conclusion[:h2_match.start()].strip()
-
                 # 후처리: 섹션 중복 제거 + boilerplate 제거
+                # NOTE: EOD 형식은 h2 헤더 기반이므로 h2 절단 로직 제거됨
                 conclusion = self._dedup_sections(conclusion)
                 conclusion = self._remove_boilerplate(conclusion)
                 conclusion = self._truncate_after_conclusion(conclusion)
@@ -494,7 +490,7 @@ class CoTReasoningEngine:
             r"^(?:legal(?:\s*(?:&|and)\s*compliance|\s*disclaimer)?|disclaimer|"
             r"contact(?:\s*information)?|tag[s]?|action\s*plan|copyright|"
             r"executive\s*summary|business\s*description|reference[s]?|"
-            r"참고\s*(?:문서|리포트|자료)|투자\s*의견|key\s*takeaways?|"
+            r"참고\s*(?:문서|리포트|자료)|key\s*takeaways?|"
             r"저작권|면책|연락처|태그|핵심\s*키워드|키워드)$",
             re.IGNORECASE,
         )
@@ -668,10 +664,12 @@ class CoTReasoningEngine:
         if thought_match:
             result["thought"] = thought_match.group(1).strip()
 
-        # 2. **Action**: search 또는 conclude
-        action_match = re.search(r"\*\*Action\*\*:\s*(\w+)", content)
+        # 2. **Action**: search 또는 conclude (ActionType.ANALYZE 형식도 처리)
+        action_match = re.search(
+            r"\*\*Action\*\*:\s*(ActionType\.)?(\w+)", content, re.IGNORECASE
+        )
         if action_match:
-            action_str = action_match.group(1).lower()
+            action_str = action_match.group(2).lower()
             if action_str in ("search", "analyze", "conclude"):
                 result["action"] = action_str
             else:
@@ -776,72 +774,83 @@ class CoTReasoningEngine:
         return result
 
     def _parse_synthesis_response(self, content: str) -> Dict:
-        """Synthesis 응답 파싱 (Markdown 형식)"""
+        """Synthesis 응답 파싱 (EOD Markdown 형식 + 레거시 호환)"""
         result = {}
 
-        # 1. Key Findings 추출
-        key_findings = []
-        findings_match = re.search(
-            r"##\s*Key\s*Findings?\s*\n([\s\S]*?)(?=\n---|\n##|\Z)",
-            content,
-            re.IGNORECASE,
-        )
-        if findings_match:
-            findings_text = findings_match.group(1)
-            findings = re.findall(r"[-*]\s+(.+?)(?=\n[-*]|\n\n|\Z)", findings_text)
-            if not findings:
-                findings = re.findall(
-                    r"\d+\.\s+(.+?)(?=\n\d+\.|\n\n|\Z)", findings_text
-                )
-            key_findings = [f.strip() for f in findings if f.strip()]
-
-        result["key_findings"] = key_findings[:5]
-
-        # 2. Confidence 추출 (## Confidence: N% 또는 **Confidence: N%** 둘 다 지원)
+        # 1. Confidence 추출 — 우선순위:
+        #    (a) EOD footer: *신뢰도: N%*
+        #    (b) 구형: ## Confidence: N% / **Confidence: N%**
         conf_match = re.search(
-            r"(?:##?\s*|\*\*\s*)Confidence[:\s]*(\d+(?:\.\d+)?)\s*%",
+            r"\*신뢰도:\s*(\d+(?:\.\d+)?)\s*%",
             content,
-            re.IGNORECASE,
         )
+        if not conf_match:
+            conf_match = re.search(
+                r"(?:##?\s*|\*\*\s*)Confidence[:\s]*(\d+(?:\.\d+)?)\s*%",
+                content,
+                re.IGNORECASE,
+            )
         if conf_match:
             conf_val = float(conf_match.group(1))
             result["confidence"] = conf_val / 100 if conf_val > 1 else conf_val
         else:
-            result["confidence"] = 0.5
+            result["confidence"] = 0.85  # 합성 성공 = 높은 신뢰도 기본값
 
-        # 3. Conclusion (전체 리포트 본문)
-        conclusion_match = re.search(
-            r"(##\s*.+?리[서포]트[\s\S]*?)(?=##\s*Confidence|\Z)",
+        # 2. Key Findings — EOD: ### 투자 포인트 ✅/⚠️ 불릿
+        key_findings = []
+        invest_match = re.search(
+            r"###\s*투자\s*포인트[\s\S]*?\n([\s\S]*?)(?=\n---|\n##|\Z)",
             content,
-            re.IGNORECASE,
         )
-        if conclusion_match:
-            result["conclusion"] = conclusion_match.group(1).strip()
-        else:
-            if findings_match:
-                rest_start = findings_match.end()
-                result["conclusion"] = content[rest_start:].strip()
-            else:
-                result["conclusion"] = content.strip()
+        if invest_match:
+            # ✅/⚠️ 이모지 기반 불릿 (⚠️는 2코드포인트라 문자클래스 불안정 → 직접 매칭)
+            findings = re.findall(
+                r"[✅⚠](?:️)?\s*\*\*[^*]+\*\*:\s*(.+)",
+                invest_match.group(1),
+            )
+            key_findings = [f.strip() for f in findings if f.strip()]
 
-        # 4. JSON 형식 fallback (이전 버전 호환)
-        if not result.get("conclusion") or len(result["conclusion"]) < 50:
+        # 레거시 Key Findings 블록 fallback
+        if not key_findings:
+            findings_match = re.search(
+                r"##\s*Key\s*Findings?\s*\n([\s\S]*?)(?=\n---|\n##|\Z)",
+                content,
+                re.IGNORECASE,
+            )
+            if findings_match:
+                findings = re.findall(
+                    r"[-*]\s+(.+?)(?=\n[-*]|\n\n|\Z)", findings_match.group(1)
+                )
+                key_findings = [f.strip() for f in findings if f.strip()]
+
+        result["key_findings"] = key_findings[:5]
+
+        # 3. Conclusion — EOD: 전체 content가 리포트 본문
+        #    [분석모드: EOD_DEEP_REPORT] 태그 제거 후 사용
+        conclusion = re.sub(r"\[분석모드:[^\]]+\]\n?", "", content).strip()
+
+        # JSON 형식 fallback (이전 버전 호환)
+        if len(conclusion) < 50:
             json_match = re.search(r'\{[\s\S]*"conclusion"[\s\S]*\}', content)
             if json_match:
                 try:
                     parsed = json.loads(json_match.group())
                     if parsed.get("conclusion"):
-                        result["conclusion"] = parsed["conclusion"]
+                        conclusion = parsed["conclusion"]
                     if parsed.get("key_findings"):
                         result["key_findings"] = parsed["key_findings"]
                     if parsed.get("confidence"):
-                        result["confidence"] = parsed["confidence"]
+                        conf_val = parsed["confidence"]
+                        result["confidence"] = conf_val / 100 if conf_val > 1 else conf_val
                 except json.JSONDecodeError:
                     pass
 
+        result["conclusion"] = conclusion
+
         logger.debug(
             f"Synthesis 파싱: conclusion={len(result.get('conclusion', ''))}자, "
-            f"findings={len(result.get('key_findings', []))}개"
+            f"findings={len(result.get('key_findings', []))}개, "
+            f"confidence={result.get('confidence', 0):.0%}"
         )
 
         return result
