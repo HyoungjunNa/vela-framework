@@ -135,8 +135,9 @@ class ResearchSearchModule:
 
         # 벡터 유사도 필터 (종목코드 있을 때만 — 뉴스 소스만 대상)
         if stock_code:
-            news_sources = [r for r in results if r.source_type.value == "news"]
-            non_news = [r for r in results if r.source_type.value != "news"]
+            # use_enum_values=True로 인해 source_type이 문자열로 저장됨
+            news_sources = [r for r in results if str(r.source_type) == "news"]
+            non_news = [r for r in results if str(r.source_type) != "news"]
             if news_sources:
                 try:
                     from .tools.vector_filter import get_vector_filter
