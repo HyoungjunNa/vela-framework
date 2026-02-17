@@ -55,12 +55,25 @@ if BACKEND == "zerogpu":
 
 if _has_spaces:
     @spaces.GPU(duration=300)
-    def _run_research_gpu(agent, query, options, step_callback):
-        """GPU 컨텍스트 내에서 전체 research 실행 (단일 GPU 할당)"""
-        return agent.research(query=query, options=options, step_callback=step_callback)
+    def _run_research_gpu(query: str, max_iterations: int):
+        """GPU 컨텍스트 내에서 전체 research 실행 (단일 GPU 할당).
+
+        ZeroGPU는 multiprocessing으로 인자를 pickle하므로
+        ResearchAgent, callback 등 pickle 불가 객체는 이 함수 내부에서 생성.
+        인자는 str, int 등 기본 타입만 허용.
+        """
+        from vela import ResearchAgent
+        from vela.schemas import ResearchOptions
+        agent = ResearchAgent(llm_backend="zerogpu")
+        options = ResearchOptions(max_iterations=max_iterations, extract_content=True)
+        return agent.research(query=query, options=options)
 else:
-    def _run_research_gpu(agent, query, options, step_callback):
-        return agent.research(query=query, options=options, step_callback=step_callback)
+    def _run_research_gpu(query: str, max_iterations: int):
+        from vela import ResearchAgent
+        from vela.schemas import ResearchOptions
+        agent = ResearchAgent(llm_backend=BACKEND)
+        options = ResearchOptions(max_iterations=max_iterations, extract_content=True)
+        return agent.research(query=query, options=options)
 
 
 def run_research(query: str, max_iterations: int):
@@ -75,36 +88,13 @@ def run_research(query: str, max_iterations: int):
         return
 
     try:
-        from vela import ResearchAgent
-        from vela.schemas import ResearchOptions
-
         # 첫 번째 yield: 진행 상황 초기화 (UI 즉시 반응)
         progress_lines = [f"## 리서치 진행 중: {query.strip()}\n"]
         yield "\n".join(progress_lines), "", ""
 
-        def on_step(info):
-            phase = info.get("phase")
-            step = info.get("step", "")
-            if phase == "reasoning":
-                progress_lines.append(f"### Step {step}")
-                progress_lines.append("추론 중...")
-            elif phase == "searching":
-                q = info.get("query", "")
-                progress_lines.append(f"검색: `{q}`")
-            elif phase == "search_done":
-                n = info.get("sources_found", 0)
-                progress_lines.append(f"**{n}개** 소스 발견\n")
-            elif phase == "synthesizing":
-                n = info.get("sources_count", 0)
-                progress_lines.append(f"\n### 최종 리포트 생성 중... ({n}개 소스 종합)")
-
-        agent = ResearchAgent(llm_backend=BACKEND)
-        options = ResearchOptions(
-            max_iterations=int(max_iterations),
-            extract_content=True,
-        )
         # 단일 GPU 컨텍스트에서 전체 research 실행
-        result = _run_research_gpu(agent, query.strip(), options, on_step)
+        # ZeroGPU pickle 제약: agent, callback 등은 _run_research_gpu 내부에서 생성
+        result = _run_research_gpu(query.strip(), int(max_iterations))
 
         if not result:
             yield "리서치 결과가 없습니다.", "", ""
