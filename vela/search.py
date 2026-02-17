@@ -133,6 +133,19 @@ class ResearchSearchModule:
                 except Exception as e:
                     logger.warning(f"{source_name} 검색 실패: {e}")
 
+        # 벡터 유사도 필터 (종목코드 있을 때만 — 뉴스 소스만 대상)
+        if stock_code:
+            news_sources = [r for r in results if r.source_type.value == "news"]
+            non_news = [r for r in results if r.source_type.value != "news"]
+            if news_sources:
+                try:
+                    from .tools.vector_filter import get_vector_filter
+                    vf = get_vector_filter()
+                    news_sources = vf.filter_sources(news_sources, stock_code)
+                except Exception as e:
+                    logger.warning(f"벡터 필터링 건너뜀: {e}")
+            results = news_sources + non_news
+
         # 관련성 점수로 정렬
         results.sort(key=lambda x: x.relevance_score, reverse=True)
 

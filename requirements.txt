@@ -10,3 +10,4 @@ accelerate>=0.28
 bitsandbytes>=0.43
 huggingface_hub>=0.20
 sentencepiece>=0.2
+sentence-transformers>=2.7

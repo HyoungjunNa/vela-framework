@@ -37,6 +37,8 @@ Thumbs.db
 *.pth
 *.ckpt
 data/
+!vela/data/
+!vela/data/*.pkl
 models/
 output/
 *.db
