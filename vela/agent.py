@@ -289,7 +289,7 @@ class ResearchAgent:
                     logger.warning(
                         f"연속 search {consecutive_search_count}회 도달 - analyze 강제"
                     )
-                    step.action = ActionType.ANALYZE
+                    step.action = "analyze"  # use_enum_values=True bypass 방지
                     step.observation = (
                         f"연속 search {MAX_CONSECUTIVE_SEARCH}회 제한으로 analyze 전환"
                     )
@@ -556,7 +556,7 @@ class ResearchAgent:
             )
 
             # 액션 시퀀스
-            action_sequence = [s.action.value for s in steps]
+            action_sequence = [str(s.action) for s in steps]
 
             # =================================================================
             # Claim-Evidence 매핑 생성 (Writer 학습용)
@@ -1071,7 +1071,7 @@ JSON 형식으로 응답하세요:
         return TrajectoryStep(
             step=step_num,
             pre_state=pre_state,
-            action=step.action.value,
+            action=str(step.action),
             action_input=step.query,
             observation=observation,
             post_state=post_state,
@@ -1340,7 +1340,7 @@ JSON 형식으로 응답하세요:
                     {
                         "step": s.step_number,
                         "thought": s.thought,
-                        "action": s.action.value,
+                        "action": str(s.action),
                         "query": s.query,
                         "observation": s.observation,
                         "confidence": s.confidence,
@@ -1517,7 +1517,7 @@ JSON 형식으로 응답하세요:
                 {
                     "step": step.step_number,
                     "thought": step.thought,
-                    "action": step.action.value,
+                    "action": str(step.action),
                     "query": step.query,
                     "observation": step.observation,
                     "sources_found": step.sources_found,
