@@ -558,43 +558,18 @@ class ResearchResult(BaseModel):
         return self.model_dump_json(indent=indent)
 
     def to_markdown(self) -> str:
-        """마크다운 리포트로 변환"""
-        md = f"# 리서치 결과: {self.query}\n\n"
-        md += f"**신뢰도**: {self.confidence:.0%}\n"
-        md += f"**소스 수**: {len(self.sources)}개\n"
-        md += f"**소요 시간**: {self.metadata.elapsed_seconds:.1f}초\n\n"
+        """마크다운 리포트로 변환 (STONKS EOD 형식)
 
-        # 핵심 발견사항
-        if self.key_findings:
-            md += "## 핵심 발견사항\n\n"
-            for finding in self.key_findings:
-                md += f"- {finding}\n"
-            md += "\n"
+        synthesis 단계에서 이미 EOD 리포트 구조로 생성되므로
+        conclusion을 직접 출력하고, 메타데이터는 하단에 접힌 형식으로 표시.
+        """
+        # 결론이 이미 EOD 리포트 형식 — 그대로 출력
+        md = self.conclusion.strip() + "\n"
 
-        # 결론
-        md += "## 결론\n\n"
-        md += self.conclusion + "\n\n"
-
-        # 추론 과정
-        md += "## 추론 과정\n\n"
-        for step in self.reasoning_trace:
-            md += f"### Step {step.step_number}\n"
-            md += f"**사고**: {step.thought}\n"
-            md += f"**액션**: {step.action}"
-            if step.query:
-                md += f" - `{step.query}`"
-            md += f"\n**관찰**: {step.observation}\n"
-            md += f"**신뢰도**: {step.confidence:.0%}\n\n"
-
-        # 소스
-        md += "## 참고 자료\n\n"
-        for i, src in enumerate(self.sources, 1):
-            md += f"{i}. [{src.title}]({src.url})"
-            if src.securities_firm:
-                md += f" ({src.securities_firm})"
-            if src.date:
-                md += f" - {src.date}"
-            md += "\n"
+        # 하단 메타데이터 (Gradio accordion용)
+        md += "\n---\n"
+        md += f"*신뢰도: {self.confidence:.0%} · 소스: {len(self.sources)}개 · "
+        md += f"소요: {self.metadata.elapsed_seconds:.0f}초*\n"
 
         return md
 
