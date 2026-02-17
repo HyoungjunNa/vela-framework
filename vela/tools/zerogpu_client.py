@@ -2,6 +2,7 @@
 
 HF Spaces 환경: @spaces.GPU + transformers 모듈 레벨 로드 (float16)
 로컬 환경: HF Inference API 원격 추론 (GPU 불필요)
+Sampling: generation_config.json 위임 (top_k=40, top_p=0.95, rep_penalty=1.0)
 
 RunPodClient 호환 인터페이스:
     client = ZeroGPUClient()
