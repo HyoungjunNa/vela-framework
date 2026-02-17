@@ -21,7 +21,7 @@ from ..schemas import Source
 logger = logging.getLogger(__name__)
 
 _LEAN_PKL = Path(__file__).parent.parent / "data" / "company_vectors_lean.pkl"
-_MODEL_NAME = "snunlp/KR-SBERT-V40K-klueNLI-augSTS"
+_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 _DEFAULT_THRESHOLD = 0.25  # 코사인 유사도 임계값
 _BATCH_SIZE = 32
 
