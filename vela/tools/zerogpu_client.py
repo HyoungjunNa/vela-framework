@@ -57,45 +57,30 @@ if _ON_SPACES:
 
 
 # =============================================================================
-# @spaces.GPU 데코레이터 (HF Spaces 전용)
+# 내부 생성 함수 (GPU 관리는 app.py의 단일 @spaces.GPU 컨텍스트에서)
+# @spaces.GPU를 _generate마다 붙이면 동일 요청 내 다중 GPU 할당 실패함
 # =============================================================================
-if _has_spaces:
 
-    @spaces.GPU(duration=120)
-    def _generate(input_ids, attention_mask, gen_params):
-        import torch
+def _generate(input_ids, attention_mask, gen_params):
+    """모델 추론 (GPU 컨텍스트는 호출자에서 관리)
 
-        # ZeroGPU가 모델을 CUDA로 옮긴 후 입력도 같은 디바이스로 이동
-        device = next(_model.parameters()).device
-        input_ids = input_ids.to(device)
-        attention_mask = attention_mask.to(device)
+    ZeroGPU는 동일 Gradio 요청 내 다중 @spaces.GPU 호출 시 두 번째부터 실패.
+    app.py에서 전체 research를 @spaces.GPU(duration=300)으로 단일 래핑.
+    """
+    import torch
 
-        with torch.no_grad():
-            outputs = _model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                **gen_params,
-            )
-        new_tokens = outputs[0][input_ids.shape[1] :]
-        return _tokenizer.decode(new_tokens, skip_special_tokens=True), len(new_tokens)
+    device = next(_model.parameters()).device
+    input_ids = input_ids.to(device)
+    attention_mask = attention_mask.to(device)
 
-else:
-
-    def _generate(input_ids, attention_mask, gen_params):
-        import torch
-
-        device = next(_model.parameters()).device
-        input_ids = input_ids.to(device)
-        attention_mask = attention_mask.to(device)
-
-        with torch.no_grad():
-            outputs = _model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                **gen_params,
-            )
-        new_tokens = outputs[0][input_ids.shape[1] :]
-        return _tokenizer.decode(new_tokens, skip_special_tokens=True), len(new_tokens)
+    with torch.no_grad():
+        outputs = _model.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            **gen_params,
+        )
+    new_tokens = outputs[0][input_ids.shape[1]:]
+    return _tokenizer.decode(new_tokens, skip_special_tokens=True), len(new_tokens)
 
 
 # =============================================================================

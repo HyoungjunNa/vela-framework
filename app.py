@@ -42,16 +42,33 @@ def get_backend() -> str:
 BACKEND = get_backend()
 logger.info(f"LLM 백엔드: {BACKEND}")
 
-# ZeroGPU: @spaces.GPU 데코레이터를 시작 시 등록해야 함
+# ZeroGPU: 전체 research를 단일 @spaces.GPU(duration=300)으로 래핑
+# _generate()마다 @spaces.GPU를 붙이면 동일 요청 내 두 번째 GPU 할당 실패
+_has_spaces = False
 if BACKEND == "zerogpu":
-    import vela.tools.zerogpu_client  # noqa: F401 — registers @spaces.GPU
+    import vela.tools.zerogpu_client  # noqa: F401 — 모델 사전 로드
+    try:
+        import spaces
+        _has_spaces = True
+    except ImportError:
+        pass
+
+if _has_spaces:
+    @spaces.GPU(duration=300)
+    def _run_research_gpu(agent, query, options, step_callback):
+        """GPU 컨텍스트 내에서 전체 research 실행 (단일 GPU 할당)"""
+        return agent.research(query=query, options=options, step_callback=step_callback)
+else:
+    def _run_research_gpu(agent, query, options, step_callback):
+        return agent.research(query=query, options=options, step_callback=step_callback)
 
 
 def run_research(query: str, max_iterations: int):
     """리서치 실행 — 스트리밍 제너레이터.
 
-    ZeroGPU는 @spaces.GPU 데코레이터가 Gradio 이벤트 핸들러 메인 스레드에서만
-    작동하므로, 백그라운드 스레드 없이 동기 실행합니다.
+    ZeroGPU: 전체 research를 단일 @spaces.GPU(duration=300) 컨텍스트로 실행.
+    동일 Gradio 요청 내 다중 @spaces.GPU 호출 시 두 번째부터 GPU 할당 실패하므로
+    _run_research_gpu()에서 한 번만 GPU를 할당하고 모든 LLM 추론을 수행.
     """
     if not query or not query.strip():
         yield "쿼리를 입력해주세요.", "", ""
@@ -65,7 +82,6 @@ def run_research(query: str, max_iterations: int):
         progress_lines = [f"## 리서치 진행 중: {query.strip()}\n"]
         yield "\n".join(progress_lines), "", ""
 
-        # 진행 상황 콜백 (thread-safe queue 없이 단순 리스트 축적)
         def on_step(info):
             phase = info.get("phase")
             step = info.get("step", "")
@@ -82,15 +98,13 @@ def run_research(query: str, max_iterations: int):
                 n = info.get("sources_count", 0)
                 progress_lines.append(f"\n### 최종 리포트 생성 중... ({n}개 소스 종합)")
 
-        # ZeroGPU: 메인 스레드에서 동기 실행 (threading.Thread 제거)
         agent = ResearchAgent(llm_backend=BACKEND)
         options = ResearchOptions(
             max_iterations=int(max_iterations),
             extract_content=True,
         )
-        result = agent.research(
-            query=query.strip(), options=options, step_callback=on_step,
-        )
+        # 단일 GPU 컨텍스트에서 전체 research 실행
+        result = _run_research_gpu(agent, query.strip(), options, on_step)
 
         if not result:
             yield "리서치 결과가 없습니다.", "", ""
