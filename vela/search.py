@@ -179,8 +179,10 @@ class ResearchSearchModule:
         return sources
 
     def _search_stock_data(self, stock_code: str) -> List[Source]:
-        """네이버 증권 통합 데이터 조회 (1회 API 호출 → 시세 + 수급 Source 생성)"""
+        """네이버 증권 통합 데이터 조회 (시세 + 수급 + OHLCV Source 생성)"""
         from .tools.naver_finance_client import (
+            fetch_ohlcv,
+            fetch_price_summary,
             fetch_stock_integration,
             parse_deal_trend,
             parse_total_infos,
@@ -246,6 +248,35 @@ class ResearchSearchModule:
                         relevance_score=0.95,
                     )
                 )
+
+        # 3. OHLCV 최근 5일 주가 추세 (pykrx naver 포크)
+        summary = fetch_price_summary(stock_code, days=5)
+        if summary:
+            close = summary.get("close", 0)
+            chg_1d = summary.get("change_pct_1d", 0.0)
+            chg_5d = summary.get("change_pct_5d", 0.0)
+            high_5d = summary.get("high_5d", 0)
+            low_5d = summary.get("low_5d", 0)
+            avg_vol = summary.get("avg_volume_5d", 0)
+            as_of = summary.get("as_of", "")
+
+            chg_1d_str = f"{'+' if chg_1d >= 0 else ''}{chg_1d:.2f}%"
+            chg_5d_str = f"{'+' if chg_5d >= 0 else ''}{chg_5d:.2f}%"
+
+            snippet = (
+                f"기준일: {as_of}; 종가: {close:,}원 ({chg_1d_str}); "
+                f"5일변동: {chg_5d_str}; 5일고가: {high_5d:,}원; "
+                f"5일저가: {low_5d:,}원; 5일평균거래량: {avg_vol:,}주"
+            )
+            results.append(
+                Source(
+                    title=f"{stock_name} 주가추세 5일 (네이버증권)",
+                    url=f"naver://ohlcv/{stock_code}",
+                    source_type=SourceType.PRICE,
+                    snippet=snippet,
+                    relevance_score=0.95,
+                )
+            )
 
         return results
 
