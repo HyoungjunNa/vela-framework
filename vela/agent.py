@@ -294,6 +294,11 @@ class ResearchAgent:
                         f"연속 search {MAX_CONSECUTIVE_SEARCH}회 제한으로 analyze 전환"
                     )
 
+                if step.action == ActionType.SEARCH and not step.query:
+                    # query가 None이면 원본 쿼리로 fallback (모델이 **Query**: 필드 누락 시)
+                    step.query = query
+                    logger.warning(f"step.query 누락 - 원본 쿼리로 fallback: '{query}'")
+
                 if step.action == ActionType.SEARCH and step.query:
                     # 중복 쿼리 → 자동 다양화 (aspect 키워드 추가)
                     if step.query in search_queries_list:
