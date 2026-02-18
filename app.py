@@ -39,6 +39,20 @@ def get_backend() -> str:
     return "zerogpu"
 
 
+def _is_zerogpu_quota_error(e: Exception) -> bool:
+    """ZeroGPU 쿼터/할당 오류 여부 판별"""
+    msg = str(e).lower()
+    return any(kw in msg for kw in (
+        "quota", "zerogpu", "out of gpu", "no gpu", "gpu quota",
+        "exceeded", "gpu not available", "not enough gpu",
+    ))
+
+
+def _runpod_available() -> bool:
+    """RunPod Serverless 환경변수 설정 여부 확인"""
+    return bool(os.environ.get("RUNPOD_API_KEY") and os.environ.get("RUNPOD_ENDPOINT_ID"))
+
+
 BACKEND = get_backend()
 logger.info(f"LLM 백엔드: {BACKEND}")
 
@@ -76,6 +90,15 @@ else:
         return agent.research(query=query, options=options)
 
 
+def _run_research_runpod(query: str, max_iterations: int):
+    """RunPod Serverless fallback (GPU 데코레이터 없음)"""
+    from vela import ResearchAgent
+    from vela.schemas import ResearchOptions
+    agent = ResearchAgent(llm_backend="runpod")
+    options = ResearchOptions(max_iterations=max_iterations, extract_content=True)
+    return agent.research(query=query, options=options)
+
+
 def run_research(query: str, max_iterations: int):
     """리서치 실행 — 스트리밍 제너레이터.
 
@@ -94,7 +117,21 @@ def run_research(query: str, max_iterations: int):
 
         # 단일 GPU 컨텍스트에서 전체 research 실행
         # ZeroGPU pickle 제약: agent, callback 등은 _run_research_gpu 내부에서 생성
-        result = _run_research_gpu(query.strip(), int(max_iterations))
+        result = None
+        try:
+            result = _run_research_gpu(query.strip(), int(max_iterations))
+        except Exception as gpu_err:
+            if _is_zerogpu_quota_error(gpu_err) and _runpod_available():
+                logger.warning(f"ZeroGPU 쿼터 소진, RunPod Serverless로 전환: {gpu_err}")
+                yield (
+                    f"## 리서치 진행 중: {query.strip()}\n\n"
+                    f"> ⚠️ ZeroGPU 쿼터 초과 — RunPod Serverless로 전환합니다...\n",
+                    "",
+                    "",
+                )
+                result = _run_research_runpod(query.strip(), int(max_iterations))
+            else:
+                raise
 
         if not result:
             yield "리서치 결과가 없습니다.", "", ""
