@@ -78,9 +78,9 @@ class RunPodClient:
             "max_tokens": max_tokens,
             "temperature": temperature,
             # vLLM은 generation_config.json을 자동 적용하지 않으므로 명시적 전달
-            "top_k": 20,
-            "top_p": 0.8,
-            "repetition_penalty": 1.1,
+            "top_k": 40,
+            "top_p": 0.95,
+            "repetition_penalty": 1.0,
         }
         if stop:
             sampling_params["stop"] = stop
