@@ -174,6 +174,10 @@ class RunPodClient:
             choice = output["choices"][0]
             if "message" in choice:
                 text = choice["message"].get("content", "")
+            elif "tokens" in choice:
+                # RunPod vLLM: tokens 배열 형식 (["response text"])
+                tokens = choice["tokens"]
+                text = "".join(tokens) if isinstance(tokens, list) else str(tokens)
             else:
                 text = choice.get("text", "")
 
@@ -183,9 +187,11 @@ class RunPodClient:
                 "success": True,
                 "content": text.strip(),
                 "usage": {
-                    "prompt_tokens": usage.get("prompt_tokens", 0),
-                    "completion_tokens": usage.get("completion_tokens", 0),
-                    "total_tokens": usage.get("total_tokens", 0),
+                    # RunPod vLLM: input/output 또는 prompt_tokens/completion_tokens
+                    "prompt_tokens": usage.get("prompt_tokens", usage.get("input", 0)),
+                    "completion_tokens": usage.get("completion_tokens", usage.get("output", 0)),
+                    "total_tokens": usage.get("total_tokens",
+                                              usage.get("input", 0) + usage.get("output", 0)),
                 },
                 "execution_time": data.get("executionTime", 0),
                 "delay_time": data.get("delayTime", 0),
