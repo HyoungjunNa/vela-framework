@@ -360,6 +360,19 @@ class CoTReasoningEngine:
                 conclusion = self._dedup_sections(conclusion)
                 conclusion = self._truncate_after_conclusion(conclusion)
 
+                # 후처리: EOD 래퍼 헤더 제거
+                # 모델이 자연스럽게 생성하는 "# VELA..." / "## 분석 결과" 등
+                conclusion = re.sub(
+                    r"^#\s+VELA[^\n]*\n?", "", conclusion
+                )
+                conclusion = re.sub(
+                    r"^#{1,2}\s+분석\s*결과\n?", "", conclusion, flags=re.MULTILINE
+                )
+                # "### 결론" → "### 투자 의견" (모델이 결론으로 출력하는 경우 정규화)
+                conclusion = re.sub(
+                    r"^(#{1,3}\s*)결론\s*$", r"\1투자 의견", conclusion, flags=re.MULTILINE
+                )
+
                 # 후처리: 인라인 잡음 제거
                 conclusion = re.sub(
                     r"(?:^|\n)\s*#?Tag[s]?:.*?(?:\n|$)", "\n", conclusion
