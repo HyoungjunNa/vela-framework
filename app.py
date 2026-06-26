@@ -181,7 +181,7 @@ EXAMPLES = [
     ["현대차 전기차 시장 점유율", 3],
 ]
 
-with gr.Blocks(title="VELA Research Agent", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="VELA Research Agent") as demo:
     gr.Markdown(
         "# VELA Research Agent Demo\n"
         "*Korean Financial Research with 7B LLM*\n\n"
@@ -259,4 +259,4 @@ with gr.Blocks(title="VELA Research Agent", theme=gr.themes.Soft()) as demo:
 
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=7860, theme=gr.themes.Soft())

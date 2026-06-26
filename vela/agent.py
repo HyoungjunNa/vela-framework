@@ -66,7 +66,7 @@ class ResearchAgent:
     ):
         """
         Args:
-            llm_backend: LLM 백엔드 ("runpod" | "mlx" | "vllm" | "zerogpu")
+            llm_backend: LLM 백엔드 ("runpod" | "mlx" | "vllm" | "zerogpu" | "lmstudio")
             extract_content: 콘텐츠 본문 추출 활성화
         """
         self.llm_backend = llm_backend
@@ -118,6 +118,11 @@ class ResearchAgent:
             from .tools.vllm_client import VLLMClient
 
             return VLLMClient()
+
+        elif self.llm_backend == "lmstudio":
+            from .tools.lmstudio_client import LMStudioClient
+
+            return LMStudioClient()
 
         elif self.llm_backend == "zerogpu":
             from .tools.zerogpu_client import ZeroGPUClient

@@ -3,6 +3,7 @@
 from .runpod_client import RunPodClient
 from .mlx_client import VELAMLXClient
 from .vllm_client import VLLMClient
+from .lmstudio_client import LMStudioClient
 from .ddg_search import DDGSearchTool
 from .naver_search import NaverSearchTool
 from .confidence_gate import ConfidenceGate
@@ -12,6 +13,7 @@ __all__ = [
     "RunPodClient",
     "VELAMLXClient",
     "VLLMClient",
+    "LMStudioClient",
     "DDGSearchTool",
     "NaverSearchTool",
     "ConfidenceGate",

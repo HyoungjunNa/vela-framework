@@ -40,6 +40,7 @@ VLLM_MODEL_NAME = os.getenv("VLLM_MODEL_NAME", "intrect/vela")
 
 # LM Studio
 LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:3000/v1")
+LMSTUDIO_MODEL_NAME = os.getenv("LMSTUDIO_MODEL_NAME", "intrect/vela")
 
 # Perplexity (Adversary Agent)
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
