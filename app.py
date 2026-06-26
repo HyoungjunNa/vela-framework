@@ -62,7 +62,7 @@ _has_spaces = False
 if BACKEND == "zerogpu":
     import vela.tools.zerogpu_client  # noqa: F401 — 모델 사전 로드
     try:
-        import spaces
+        import spaces  # type: ignore
         _has_spaces = True
     except ImportError:
         pass
